@@ -57,7 +57,6 @@ export interface App {
   status: AppStatus;
   priority: Priority;
   url: string;
-  repoUrl: string;
   environments: EnvLink[];
   techStack: string[];
   ownerId: string | null;

@@ -10,7 +10,7 @@ An application-portfolio manager for the IT team. List every application you bui
 | --- | --- |
 | **Dashboard** | KPI cards, animated *App wall* (picture-rail gallery of pinned & most-used apps), usage trend, status donut, most-used apps, tasks due in 14 days, recent activity, quick launch |
 | **Applications** | Grid / List / Kanban board (drag to change status), filters, search, sort, pin, Excel export, **import from .xlsx/.xls/.csv/.tsv/.ods/.json or pasted rows** with automatic column mapping |
-| **App page** | Hero with link health-check, *Open app* (counted as a launch), extra environment links, repo link |
+| **App page** | Hero with link health-check, *Open app* (counted as a launch), extra environment links |
 | **Tasks** | Headings with checklists, animated checkboxes, inline add (Enter), assignee, due date, priority, notes, reorder, move between headings, overdue highlighting, completion burst, import / export |
 | **Usage** | Daily active users, sessions, transactions, avg minutes — form or bulk import (single app or multi-app sheet), charts (30d / 90d / 1y / all), trend vs previous 30 days, launches via IT Manager |
 | **Docs & manual** | Markdown documents per app (User manual, Overview, Technical, FAQ…), templates, split-view editor with live preview, table of contents, import **.docx / .md / .html / .txt**, download .md, print / save as PDF |
@@ -116,7 +116,7 @@ npm run typecheck
 
 Templates: **Settings → Import templates**. Column names are matched loosely (e.g. *App Name*, *Stage*, *Prod URL* are recognised), and you can re-map any column before importing.
 
-* **Applications**: Name*, Code, Tagline, Description, Status, Category, Department, Link, Repository, Version, Tech stack, Owner (username/name/email), Priority, Start date, Go-live date. Existing apps are matched by code or name and updated.
+* **Applications**: Name*, Code, Tagline, Description, Status, Category, Department, Link, Version, Tech stack, Owner (username/name/email), Priority, Start date, Go-live date. Existing apps are matched by code or name and updated.
 * **Tasks**: Heading, Task*, Done (yes/no/✓), Assignee, Due date, Priority, Notes.
 * **Usage**: Application (code or name — not needed inside an app), Date*, Active users, Sessions, Transactions, Avg minutes, Notes. One row per app per day; re-importing a date updates it.
 

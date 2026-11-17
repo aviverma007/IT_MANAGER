@@ -15,12 +15,12 @@ import { useQueryClient } from "@tanstack/react-query";
 
 type Form = {
   name: string; code: string; tagline: string; description: string; category: string; department: string; status: string; priority: string;
-  url: string; repoUrl: string; environments: EnvLink[]; techStack: string; ownerId: string; version: string; startDate: string; goLiveDate: string;
+  url: string; environments: EnvLink[]; techStack: string; ownerId: string; version: string; startDate: string; goLiveDate: string;
   tone: Tone; cover: string; visibility: "public" | "restricted"; withTemplate: boolean;
 };
 
 const blank = (): Form => ({
-  name: "", code: "", tagline: "", description: "", category: "", department: "", status: "planning", priority: "medium", url: "", repoUrl: "",
+  name: "", code: "", tagline: "", description: "", category: "", department: "", status: "planning", priority: "medium", url: "",
   environments: [], techStack: "", ownerId: "", version: "", startDate: new Date().toISOString().slice(0, 10), goLiveDate: "", tone: 1, cover: "",
   visibility: "public", withTemplate: true,
 });
@@ -28,7 +28,7 @@ const blank = (): Form => ({
 function fromApp(a: AppSummary): Form {
   return {
     name: a.name, code: a.code, tagline: a.tagline, description: a.description, category: a.category, department: a.department, status: a.status,
-    priority: a.priority, url: a.url, repoUrl: a.repoUrl, environments: a.environments, techStack: a.techStack.join(", "), ownerId: a.ownerId ?? "",
+    priority: a.priority, url: a.url, environments: a.environments, techStack: a.techStack.join(", "), ownerId: a.ownerId ?? "",
     version: a.version, startDate: a.startDate, goLiveDate: a.goLiveDate, tone: a.tone, cover: a.cover, visibility: a.visibility, withTemplate: false,
   };
 }
@@ -124,7 +124,6 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
         {tab === "links" && (
           <div className="grid gap-4">
             <Field label="Application link (opens from IT Manager)" hint="Every open is counted as a launch in the usage stats."><Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://smartdesk.company.local" /></Field>
-            <Field label="Source repository"><Input value={form.repoUrl} onChange={(e) => set("repoUrl", e.target.value)} placeholder="https://github.com/org/repo" /></Field>
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Other environments</span>

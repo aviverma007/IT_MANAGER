@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import {
-  Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, GitBranch, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff,
+  Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff,
 } from "lucide-react";
 import { useApp, useRun } from "@/api/hooks";
 import { pingUrl } from "@/api/client";
@@ -89,7 +89,7 @@ export default function AppDetailPage() {
         )}
         <div className={cn("relative flex flex-col gap-6 p-6 pt-24 text-white md:flex-row md:items-end md:p-8 md:pt-32", app.coverShot && "xl:pt-[22rem]")}>
           <div className="min-w-0 flex-1">
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-3 flex flex-wrap items-center gap-2">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="dark mb-3 flex flex-wrap items-center gap-2">
               <StatusBadge status={app.status} className="backdrop-blur-md" />
               {app.version && <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] font-medium backdrop-blur-md"><Tag className="size-3" />v{app.version}</span>}
               {app.visibility === "restricted" && <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] backdrop-blur-md"><Lock className="size-3" />Restricted</span>}
@@ -107,11 +107,10 @@ export default function AppDetailPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" size="lg" disabled={!app.url} onClick={() => openApp(app)} title={app.url || "Set a link in Edit"}><ExternalLink />{app.url ? "Open app" : "No link yet"}</Button>
-              {app.environments.map((e) => <Button key={e.url} variant="secondary" size="lg" onClick={() => openApp(app, e.url)} className="!bg-white/10 !text-white backdrop-blur-md"><Globe />{e.label || "Link"}</Button>)}
-              {app.repoUrl && <Button variant="secondary" size="lg" onClick={() => window.open(app.repoUrl, "_blank", "noopener")} className="!bg-white/10 !text-white backdrop-blur-md" aria-label="Repository"><GitBranch /></Button>}
-              <Button variant="secondary" size="lg" onClick={() => run("apps.favorite", { id: app.id })} className={cn("!bg-white/10 backdrop-blur-md", app.favorite ? "!text-amber-300" : "!text-white")} aria-label="Pin"><Star className={cn(app.favorite && "fill-current")} /></Button>
-              {canEdit && <Button variant="secondary" size="lg" onClick={() => setEditing(true)} className="!bg-white/10 !text-white backdrop-blur-md"><Edit3 />Edit</Button>}
-              {canEdit && me.role !== "viewer" && <Button variant="secondary" size="lg" onClick={remove} className="!bg-white/10 !text-rose-300 backdrop-blur-md" aria-label="Delete"><Trash2 /></Button>}
+              {app.environments.map((e) => <Button key={e.url} variant="overlay" size="lg" onClick={() => openApp(app, e.url)}><Globe />{e.label || "Link"}</Button>)}
+              <Button variant="overlay" size="lg" onClick={() => run("apps.favorite", { id: app.id })} className={cn(app.favorite && "!text-amber-300")} title={app.favorite ? "Unpin" : "Pin to sidebar"} aria-label="Pin"><Star className={cn(app.favorite && "fill-current")} /></Button>
+              {canEdit && <Button variant="overlay" size="lg" onClick={() => setEditing(true)}><Edit3 />Edit</Button>}
+              {canEdit && me.role !== "viewer" && <Button variant="overlay" size="lg" onClick={remove} className="!text-rose-300 hover:!bg-rose-500/30" title="Delete application" aria-label="Delete"><Trash2 /></Button>}
             </div>
           </div>
         </div>

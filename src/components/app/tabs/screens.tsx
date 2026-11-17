@@ -133,8 +133,8 @@ function Lightbox({ app, index, onIndex, onClose }: { app: AppDetail; index: num
             <span className="font-mono text-xs text-white/60">{index + 1} / {shots.length}</span>
             <span className="truncate text-sm font-medium">{shot.caption || app.name}</span>
             {shot.url && <span className="hidden truncate font-mono text-xs text-white/50 md:inline">{shot.url}</span>}
-            <a href={shotSrc(shot.id)} download={`${app.code || app.name}-${index + 1}.jpg`} className="ml-auto"><Button variant="ghost" size="icon" className="!text-white" aria-label="Download"><Download /></Button></a>
-            <Button variant="ghost" size="icon" className="!text-white" onClick={onClose} aria-label="Close"><X /></Button>
+            <a href={shotSrc(shot.id)} download={`${app.code || app.name}-${index + 1}.jpg`} className="ml-auto"><Button variant="overlay" size="icon" aria-label="Download"><Download /></Button></a>
+            <Button variant="overlay" size="icon" onClick={onClose} aria-label="Close"><X /></Button>
           </div>
           <div className="relative flex flex-1 items-center justify-center overflow-hidden px-4 pb-4 md:px-20">
             <AnimatePresence mode="popLayout" custom={dir} initial={false}>

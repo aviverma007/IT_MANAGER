@@ -11,6 +11,9 @@ const VARIANTS = {
     "text-white bg-[linear-gradient(120deg,var(--chart-1),var(--chart-2))] shadow-[inset_0_1px_0_rgb(255_255_255/0.35),inset_0_-2px_0_rgb(0_0_0/0.2),0_8px_22px_-8px_var(--chart-2)]",
   secondary: "emboss text-foreground border border-border hover:brightness-110",
   outline: "border border-border bg-transparent text-foreground hover:bg-muted/60",
+  // For buttons sitting on photos / dark banners: frosted glass with white text in BOTH themes
+  overlay:
+    "border border-white/25 bg-white/12 text-white backdrop-blur-md shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_6px_18px_-8px_rgb(0_0_0/0.6)] hover:bg-white/22 hover:border-white/40",
   ghost: "bg-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
   danger:
     "text-white bg-[linear-gradient(180deg,color-mix(in_oklab,var(--destructive)_80%,white),var(--destructive)_50%,color-mix(in_oklab,var(--destructive)_75%,black))] shadow-[inset_0_1px_0_rgb(255_255_255/0.3),inset_0_-2px_0_rgb(0_0_0/0.22),0_8px_20px_-8px_var(--destructive)]",

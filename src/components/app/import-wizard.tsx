@@ -24,7 +24,6 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: "category", label: "Category", synonyms: ["category", "type", "module"] },
     { key: "department", label: "Department", synonyms: ["department", "dept", "business", "team", "function"] },
     { key: "url", label: "Link / URL", synonyms: ["url", "link", "app link", "application link", "website", "prod url", "production url"] },
-    { key: "repoUrl", label: "Repository", synonyms: ["repo", "repository", "github", "source", "git"] },
     { key: "version", label: "Version", synonyms: ["version", "release", "ver"] },
     { key: "techStack", label: "Tech stack", synonyms: ["tech stack", "stack", "technology", "technologies", "tech"] },
     { key: "owner", label: "Owner", synonyms: ["owner", "owned by", "responsible", "developer", "spoc"] },
@@ -54,8 +53,8 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldDef[]> = {
 
 const TEMPLATES: Record<ImportKind, Record<string, unknown>[]> = {
   apps: [
-    { Name: "SmartDesk", Code: "SMARTDESK", Tagline: "Employee portal", Status: "Live", Category: "Employee portal", Department: "All employees", Link: "https://smartdesk.company.local", Repository: "https://github.com/org/smartdesk", Version: "2.4.0", "Tech stack": "React, Node.js, SQL Server", Owner: "admin", Priority: "High", "Start date": "2025-01-10", "Go-live date": "2025-06-01" },
-    { Name: "Cheque Register", Code: "CHEQUE_REG", Tagline: "Track cheques", Status: "Development", Category: "Finance", Department: "Accounts", Link: "", Repository: "", Version: "0.5.0", "Tech stack": "React, Flask", Owner: "", Priority: "Medium", "Start date": "2026-09-01", "Go-live date": "2026-12-15" },
+    { Name: "SmartDesk", Code: "SMARTDESK", Tagline: "Employee portal", Status: "Live", Category: "Employee portal", Department: "All employees", Link: "https://smartdesk.company.local", Version: "2.4.0", "Tech stack": "React, Node.js, SQL Server", Owner: "admin", Priority: "High", "Start date": "2025-01-10", "Go-live date": "2025-06-01" },
+    { Name: "Cheque Register", Code: "CHEQUE_REG", Tagline: "Track cheques", Status: "Development", Category: "Finance", Department: "Accounts", Link: "", Version: "0.5.0", "Tech stack": "React, Flask", Owner: "", Priority: "Medium", "Start date": "2026-09-01", "Go-live date": "2026-12-15" },
   ],
   tasks: [
     { Heading: "Development", Task: "Build login page", Done: "Yes", Assignee: "Anirudh", "Due date": "2026-11-20", Priority: "High", Notes: "" },

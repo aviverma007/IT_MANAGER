@@ -38,7 +38,7 @@ const MAX_ATTACHMENT = 8 * 1024 * 1024;
 
 const USER_EDITABLE = ["name", "email", "title", "department", "bio", "avatar", "tone"] as const;
 const APP_FIELDS = [
-  "name", "code", "tagline", "description", "category", "department", "status", "priority", "url", "repoUrl", "environments",
+  "name", "code", "tagline", "description", "category", "department", "status", "priority", "url", "environments",
   "techStack", "ownerId", "version", "cover", "tone", "startDate", "goLiveDate",
 ] as const;
 
@@ -102,7 +102,10 @@ export class Service {
   private migrate(db: DB): DB {
     const base = emptyDb();
     const out = { ...base, ...db, version: 2 };
-    for (const a of out.apps) if (a.coverShotId === undefined) a.coverShotId = null;
+    for (const a of out.apps) {
+      if (a.coverShotId === undefined) a.coverShotId = null;
+      delete (a as { repoUrl?: string }).repoUrl; // repository links are no longer kept
+    }
     return out;
   }
 
@@ -926,7 +929,7 @@ export class Service {
 
   private rowToApp(row: Record<string, unknown>) {
     const out: Record<string, unknown> = {};
-    for (const k of ["name", "code", "tagline", "description", "category", "department", "url", "repoUrl", "version", "cover"]) if (row[k] !== undefined && row[k] !== "") out[k] = row[k];
+    for (const k of ["name", "code", "tagline", "description", "category", "department", "url", "version", "cover"]) if (row[k] !== undefined && row[k] !== "") out[k] = row[k];
     if (row.status) {
       const s = String(row.status).toLowerCase().trim().replace(/\s+/g, "-");
       out.status = (APP_STATUSES as readonly string[]).includes(s) ? s : s === "production" || s === "prod" ? "live" : s === "dev" ? "development" : undefined;
@@ -949,7 +952,7 @@ export class Service {
     if ("code" in p) set("code", clean(p.code, 40).toUpperCase());
     for (const k of ["tagline", "category", "department", "version"] as const) if (k in p) set(k, clean(p[k], k === "tagline" ? 200 : 80));
     if ("description" in p) set("description", clean(p.description, 6000));
-    for (const k of ["url", "repoUrl"] as const) if (k in p) set(k, normalizeUrl(p[k]));
+    if ("url" in p) set("url", normalizeUrl(p.url));
     if ("status" in p && APP_STATUSES.includes(p.status)) set("status", p.status as AppStatus);
     if ("priority" in p && PRIORITIES.includes(p.priority)) set("priority", p.priority as Priority);
     if ("environments" in p && Array.isArray(p.environments)) set("environments", p.environments.map((e: any) => ({ label: clean(e?.label, 40), url: normalizeUrl(e?.url) })).filter((e: { label: string; url: string }) => e.url).slice(0, 12));
@@ -965,7 +968,7 @@ export class Service {
     const now = nowIso();
     const app: App = {
       id: uid(), name: "", code: "", tagline: "", description: "", category: "Internal tool", department: "", status: "planning", priority: "medium",
-      url: "", repoUrl: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, tone: ((this.db.apps.length % 5) + 1) as Tone,
+      url: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, tone: ((this.db.apps.length % 5) + 1) as Tone,
       startDate: ymd(), goLiveDate: "", visibility: "public", acl: {}, createdAt: now, updatedAt: now, createdBy: ctx.user.id,
     };
     this.applyAppFields(app, p);

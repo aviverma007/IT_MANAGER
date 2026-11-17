@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import * as XLSX from "xlsx";
 import {
-  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, GitBranch, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users2,
+  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users2,
 } from "lucide-react";
 import { useApps, useRun } from "@/api/hooks";
 import { useMe } from "@/lib/auth";
@@ -49,7 +49,7 @@ function AppCard({ app, index }: { app: AppSummary; index: number }) {
           )}
           {app.shotCount > 1 && <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 text-[11px] text-white backdrop-blur-md"><Camera className="size-3" />{app.shotCount}</span>}
           <div className="absolute inset-0 bg-gradient-to-t from-[var(--card)] via-transparent to-black/20" />
-          <div className="absolute left-3 top-3 flex gap-1.5"><StatusBadge status={app.status} className="backdrop-blur-md" />{app.visibility === "restricted" && <span className="grid size-6 place-items-center rounded-full bg-black/40 text-white backdrop-blur-md" title="Restricted"><Lock className="size-3" /></span>}</div>
+          <div className="absolute left-3 top-3 flex gap-1.5"><StatusBadge status={app.status} className="!bg-background/85 backdrop-blur-md" />{app.visibility === "restricted" && <span className="grid size-6 place-items-center rounded-full bg-black/40 text-white backdrop-blur-md" title="Restricted"><Lock className="size-3" /></span>}</div>
           <div className="absolute right-3 top-3"><FavoriteButton app={app} /></div>
           <div className="absolute -bottom-6 right-4 rounded-full bg-[var(--card)] p-1 shadow-xl"><ProgressRing value={app.progress} size={52} stroke={5} color={toneHex(app.tone)} /></div>
         </div>
@@ -70,7 +70,6 @@ function AppCard({ app, index }: { app: AppSummary; index: number }) {
             <Button size="sm" variant={app.url ? "primary" : "secondary"} className="flex-1" disabled={!app.url} onClick={(e) => { e.stopPropagation(); openApp(app); }} title={app.url || "No link set yet"}>
               <ExternalLink />{app.url ? "Open app" : "No link yet"}
             </Button>
-            {app.repoUrl && <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); window.open(app.repoUrl, "_blank", "noopener"); }} aria-label="Repository" title="Repository"><GitBranch /></Button>}
           </div>
         </div>
       </TiltCard>
@@ -200,7 +199,7 @@ export default function AppsPage() {
   function exportExcel() {
     const rows = list.map((a) => ({
       Name: a.name, Code: a.code, Status: STATUS_META[a.status].label, Progress: `${a.progress}%`, "Tasks done": a.tasksDone, "Tasks total": a.tasksTotal, Category: a.category, Department: a.department,
-      Owner: a.ownerName, Version: a.version, Link: a.url, Repository: a.repoUrl, "Tech stack": a.techStack.join(", "), "Sessions (30d)": a.usage.sessions30, "Active users": a.usage.activeUsers,
+      Owner: a.ownerName, Version: a.version, Link: a.url, "Tech stack": a.techStack.join(", "), "Sessions (30d)": a.usage.sessions30, "Active users": a.usage.activeUsers,
       "Launches (30d)": a.usage.launches30, "Start date": a.startDate, "Go-live date": a.goLiveDate, Priority: a.priority, Visibility: a.visibility,
     }));
     const wb = XLSX.utils.book_new();
