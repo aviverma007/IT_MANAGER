@@ -10,7 +10,7 @@
     "dev:api": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
     "build:demo": "vite build --mode demo",
-    "start": "NODE_ENV=production tsx server/index.ts",
+    "start": "tsx server/index.ts",
     "typecheck": "tsc -b --noEmit",
     "test:api": "tsx scripts/api-test.ts"
   },
