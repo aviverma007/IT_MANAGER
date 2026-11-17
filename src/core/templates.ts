@@ -28,6 +28,8 @@ ${app.description || `${app.name} helps the ${app.department || "business"} team
 > **Tip:** Bookmark the link, or open it any time from **IT Manager → Applications → ${app.name} → Open app**.
 
 ## 3. Screens at a glance
+_Tip: in the editor use **Insert screenshot** to place the real screens of the app here._
+
 | Screen | What you do there |
 | --- | --- |
 | Home / Dashboard | See a summary of your work and pending items |

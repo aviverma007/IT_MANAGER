@@ -14,6 +14,7 @@ An application-portfolio manager for the IT team. List every application you bui
 | **Tasks** | Headings with checklists, animated checkboxes, inline add (Enter), assignee, due date, priority, notes, reorder, move between headings, overdue highlighting, completion burst, import / export |
 | **Usage** | Daily active users, sessions, transactions, avg minutes — form or bulk import (single app or multi-app sheet), charts (30d / 90d / 1y / all), trend vs previous 30 days, launches via IT Manager |
 | **Docs & manual** | Markdown documents per app (User manual, Overview, Technical, FAQ…), templates, split-view editor with live preview, table of contents, import **.docx / .md / .html / .txt**, download .md, print / save as PDF |
+| **Screens** | Real screenshots of each app — **capture from the live link** on the server (Edge/Chrome, optional one-time sign-in, extra pages, desktop/laptop/tablet/mobile sizes, full-page), upload, drag-drop or **paste with Ctrl+V**. Starred screenshot is the cover on cards, the app wall and the page header; lightbox with swipe; insert screenshots into user manuals |
 | **Releases** | Version timeline with change notes; can set the app's current version |
 | **Files** | Drag-and-drop any file (≤ 8 MB) — preview images/PDF/text, download, delete |
 | **Access** | Visibility (everyone / restricted) + per-person *default / view / edit*, showing each person's effective right |
@@ -62,6 +63,16 @@ Environment variables
 | `PORT` | `4000` | API / web port |
 | `DATA_DIR` | `server/data` | Where `db.json` (and `db.json.bak`) live |
 | `SEED` | `true` | `false` → first start is empty with only `admin / admin123` |
+| `CAPTURE_BROWSER` | *(auto)* | Path to `msedge.exe` / `chrome.exe` for screenshot capture. By default the server uses the installed Edge, then Chrome |
+
+### Screenshots of your applications
+
+* **Capture all at once:** Applications → **Capture screenshots** opens every app that has a link and no screenshot yet, on the server, and saves what users see.
+* **Per app:** Screens tab → **Capture from link**. Tick *Sign in before capturing* to get past a login page (credentials are used once and never stored), and list extra pages (`/dashboard`, `/reports`) to capture inside the same session.
+* Setting or changing an app's link captures a screenshot automatically if it has none.
+* For screens a script can't reach, snip with **Win + Shift + S** and press **Ctrl + V** on the Screens tab, or drag files in.
+
+The server must be able to reach the app's link (same network / VPN). Screenshots are served from `/api/shot/:id` and stored with the rest of the data.
 
 Run as a service on Windows/Linux with PM2: `pm2 start "npm start" --name it-manager`.
 
@@ -83,7 +94,7 @@ src/
   components/app/  ← shell, app form, import wizard, markdown, activity feed, app tabs
   pages/           ← dashboard, apps, app-detail, team, logs, users, settings, guide, login
 server/index.ts    ← Express 5: POST /api/<method>, /api/apps.ping (link health), static dist/
-scripts/api-test.ts← end-to-end API test (33 checks)
+scripts/api-test.ts← end-to-end API test (40 checks)
 ```
 
 * API style: `POST /api/<method>` with `Authorization: Bearer <token>`; e.g. `apps.list`, `tasks.update`, `usage.import`, `logs.list`.
@@ -94,7 +105,7 @@ scripts/api-test.ts← end-to-end API test (33 checks)
 
 ```bash
 DATA_DIR=/tmp/itm SEED=true PORT=4000 npm start &
-API=http://localhost:4000 npm run test:api   # 33 checks: auth, rights, progress, imports, files, logs, users
+API=http://localhost:4000 npm run test:api   # 40 checks: auth, rights, progress, imports, files, logs, users
 npm run typecheck
 ```
 

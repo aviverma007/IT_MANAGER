@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import {
-  ArrowRightLeft, CheckCircle2, Download, Edit3, FilePlus2, FileUp, KeyRound, LogIn, LogOut, MousePointerClick, PlusCircle, RotateCcw, Shield, Trash2, Upload,
+  Camera, ArrowRightLeft, CheckCircle2, Download, Edit3, FilePlus2, FileUp, KeyRound, LogIn, LogOut, MousePointerClick, PlusCircle, RotateCcw, Shield, Trash2, Upload,
 } from "lucide-react";
 import type { LogEntry } from "@/core/types";
 import { cn, timeAgo } from "@/lib/utils";
@@ -14,6 +14,7 @@ export const ACTION_META: Record<string, { icon: typeof Edit3; color: string; la
   reopen: { icon: RotateCcw, color: "text-amber-400 bg-amber-500/12", label: "Reopened" },
   status: { icon: ArrowRightLeft, color: "text-violet-400 bg-violet-500/12", label: "Status" },
   import: { icon: FileUp, color: "text-cyan-400 bg-cyan-500/12", label: "Imported" },
+  capture: { icon: Camera, color: "text-pink-400 bg-pink-500/12", label: "Captured" },
   upload: { icon: Upload, color: "text-cyan-400 bg-cyan-500/12", label: "Uploaded" },
   access: { icon: Shield, color: "text-fuchsia-400 bg-fuchsia-500/12", label: "Access" },
   open: { icon: MousePointerClick, color: "text-indigo-400 bg-indigo-500/12", label: "Opened" },

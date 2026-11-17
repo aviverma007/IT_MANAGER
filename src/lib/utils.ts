@@ -89,6 +89,20 @@ export function readAsDataUrl(file: File) {
   });
 }
 
+/** Downscale an image to a JPEG data URL and report its size (screenshots keep up to 1920px). */
+export async function imageToShot(file: Blob, max = 1920) {
+  const src = await readAsDataUrl(file as File);
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  const scale = Math.min(1, max / Math.max(img.width, img.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return { dataUrl: canvas.toDataURL("image/jpeg", 0.85), width: canvas.width, height: canvas.height };
+}
+
 /** Downscale an image file to a JPEG data URL so covers and avatars stay small. */
 export async function imageToDataUrl(file: File, max = 900) {
   const src = await readAsDataUrl(file);

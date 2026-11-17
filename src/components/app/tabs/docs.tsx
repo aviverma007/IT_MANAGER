@@ -11,6 +11,8 @@ import { useConfirm } from "@/components/ui/modal";
 import { Markdown, htmlToMarkdown, tocOf } from "@/components/app/markdown";
 import { manualTemplate, technicalTemplate } from "@/core/templates";
 import { cn, download, timeAgo } from "@/lib/utils";
+import { shotSrc } from "@/api/client";
+import { Camera } from "lucide-react";
 import { toast } from "sonner";
 
 const KIND_META: Record<DocKind, { label: string; icon: typeof BookOpen }> = {
@@ -44,6 +46,17 @@ export function DocsTab({ app }: { app: AppDetail }) {
   const [editing, setEditing] = React.useState<Partial<Doc> | null>(null);
   const [pane, setPane] = React.useState<"split" | "write" | "preview">("split");
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const editorRef = React.useRef<HTMLTextAreaElement>(null);
+  const [picking, setPicking] = React.useState(false);
+  function insertShot(id: string, caption: string) {
+    if (!editing) return;
+    const ta = editorRef.current;
+    const text = editing.content ?? "";
+    const at = ta ? ta.selectionStart : text.length;
+    const snippet = `\n![${caption || "Screenshot"}](shot:${id})\n`;
+    setEditing({ ...editing, content: text.slice(0, at) + snippet + text.slice(at) });
+    setPicking(false);
+  }
   const doc = app.docs.find((d) => d.id === selected) ?? null;
 
   React.useEffect(() => { if (!app.docs.some((d) => d.id === selected)) setSelected(app.docs[0]?.id ?? null); }, [app.docs, selected]);
@@ -125,10 +138,25 @@ export function DocsTab({ app }: { app: AppDetail }) {
               <div className="flex flex-wrap gap-2 text-xs">
                 <Button size="sm" variant="ghost" onClick={() => setEditing({ ...editing, content: manualTemplate(app) })}><Wand2 />User-manual template</Button>
                 <Button size="sm" variant="ghost" onClick={() => setEditing({ ...editing, content: technicalTemplate(app) })}><Code2 />Technical template</Button>
+                <div className="relative">
+                  <Button size="sm" variant="ghost" onClick={() => setPicking((v) => !v)} disabled={!app.screenshots.length} title={app.screenshots.length ? "" : "Add screenshots in the Screens tab first"}><Camera />Insert screenshot</Button>
+                  <AnimatePresence>
+                    {picking && (
+                      <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6 }} className="glass absolute left-0 top-10 z-30 grid w-[26rem] grid-cols-2 gap-2 rounded-2xl !bg-popover/95 p-3">
+                        {app.screenshots.map((s) => (
+                          <button key={s.id} onClick={() => insertShot(s.id, s.caption)} className="overflow-hidden rounded-lg border border-border text-left hover:border-ring">
+                            <img src={shotSrc(s.id)} alt="" className="aspect-[16/10] w-full object-cover object-top" />
+                            <span className="block truncate px-2 py-1 text-[11px] text-muted-foreground">{s.caption || "Screen"}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
                 <span className="ml-auto self-center text-muted-foreground">Markdown · # headings, **bold**, - lists, | tables |, ![image](url)</span>
               </div>
               <div className={cn("grid gap-4", pane === "split" && "lg:grid-cols-2")}>
-                {pane !== "preview" && <Textarea value={editing.content ?? ""} onChange={(e) => setEditing({ ...editing, content: e.target.value })} className="min-h-[60vh] font-mono text-[13px] leading-6" spellCheck />}
+                {pane !== "preview" && <Textarea ref={editorRef} value={editing.content ?? ""} onChange={(e) => setEditing({ ...editing, content: e.target.value })} className="min-h-[60vh] font-mono text-[13px] leading-6" spellCheck />}
                 {pane !== "write" && <div className="deboss max-h-[60vh] min-h-[60vh] overflow-y-auto rounded-xl p-5"><Markdown source={editing.content ?? ""} /></div>}
               </div>
               <div className="flex justify-end gap-2">

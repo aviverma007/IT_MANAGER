@@ -89,6 +89,21 @@ const file = await call("files.upload", { appId, name: "notes.txt", type: "text/
 check("file upload", file.status === 200 && file.body.size === 5, file.body);
 check("file download returns content", (await call("files.get", { id: file.body.id }, admin)).body.dataUrl.endsWith("aGVsbG8="));
 
+// screenshots
+const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const s1 = await call("shots.add", { appId, dataUrl: png, width: 1, height: 1, caption: "Login" }, admin);
+check("screenshot added and becomes cover", s1.status === 200 && (await call("apps.get", { id: appId }, admin)).body.coverShot?.id === s1.body.id, s1.body);
+const s2 = await call("shots.add", { appId, dataUrl: png, width: 1, height: 1, caption: "Dashboard" }, admin);
+await call("shots.cover", { id: s2.body.id }, admin);
+check("cover can be switched", (await call("apps.get", { id: appId }, admin)).body.coverShot?.id === s2.body.id);
+const img = await fetch(`${API}/api/shot/${s2.body.id}?t=${admin}`);
+check("screenshot served as an image file", img.status === 200 && (img.headers.get("content-type") ?? "").startsWith("image/png"));
+check("screenshot needs a valid token", (await fetch(`${API}/api/shot/${s2.body.id}?t=nope`)).status === 404);
+check("non-images are refused", (await call("shots.add", { appId, dataUrl: "data:text/plain;base64,aGk=" }, admin)).status === 400);
+check("view-only user can't add screenshots", (await call("shots.add", { appId: apps.find((a) => a.code === "SMARTDESK").id, dataUrl: png }, viewer)).status === 403);
+await call("shots.delete", { id: s2.body.id }, admin);
+check("deleting the cover falls back to the next screenshot", (await call("apps.get", { id: appId }, admin)).body.coverShot?.id === s1.body.id);
+
 // launches & usage summary
 await call("apps.launch", { id: appId }, viewer);
 check("launch counted", (await call("apps.get", { id: appId }, admin)).body.usage.launches30 === 1);

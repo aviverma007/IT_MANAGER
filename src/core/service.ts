@@ -1,7 +1,7 @@
 // Business logic for IT Manager. Pure TypeScript with no Node or DOM dependencies, so the same code runs
 // behind the Express API (server/index.ts) and inside the browser for the offline demo build.
 import type {
-  Access, App, AppDetail, AppStatus, AppSummary, Attachment, AttachmentMeta, Change, DashboardStats, DB, Doc, DocKind,
+  Access, App, AppDetail, AppStatus, AppSummary, Attachment, AttachmentMeta, Change, CoverShot, Screenshot, ScreenshotMeta, DashboardStats, DB, Doc, DocKind,
   ImportResult, Launch, LogEntry, Paged, Priority, Role, Task, TaskGroup, Tone, UsageEntry, UsageSummary, User, UserRecord,
 } from "./types";
 import { APP_STATUSES, DOC_KINDS, PRIORITIES } from "./types";
@@ -83,7 +83,9 @@ export class Service {
 
   private migrate(db: DB): DB {
     const base = emptyDb();
-    return { ...base, ...db, version: 1 };
+    const out = { ...base, ...db, version: 2 };
+    for (const a of out.apps) if (a.coverShotId === undefined) a.coverShotId = null;
+    return out;
   }
 
   private persist() {
@@ -201,7 +203,48 @@ export class Service {
       favorite: this.db.favorites.some((f) => f.userId === user.id && f.appId === app.id),
       ownerName: owner?.name ?? "",
       docCount: this.db.docs.filter((d) => d.appId === app.id).length,
+      coverShot: this.coverShot(app),
+      shotCount: this.db.screenshots.filter((x) => x.appId === app.id).length,
     };
+  }
+
+  private coverShot(app: App): CoverShot {
+    const shot = (app.coverShotId && this.db.screenshots.find((x) => x.id === app.coverShotId)) || this.db.screenshots.filter((x) => x.appId === app.id).sort((a, b) => a.order - b.order)[0];
+    return shot ? { id: shot.id, width: shot.width, height: shot.height } : null;
+  }
+
+  /** Store a screenshot (used by the API methods and the server's capture endpoint). */
+  addScreenshot(user: UserRecord, appId: string, p: { dataUrl: string; width?: number; height?: number; caption?: string; source?: Screenshot["source"]; url?: string; setCover?: boolean }) {
+    const ctx = { user };
+    const app = this.app(ctx, appId, "edit");
+    const dataUrl = String(p.dataUrl ?? "");
+    if (!/^data:image\//.test(dataUrl)) throw new ApiError(400, "Screenshots must be images.");
+    if (dataUrl.length > 9_000_000) throw new ApiError(413, "Screenshot is too large (max ~6 MB).");
+    const shot: Screenshot = {
+      id: uid(), appId: app.id, dataUrl, width: Math.max(1, Math.round(Number(p.width) || 1600)), height: Math.max(1, Math.round(Number(p.height) || 1000)),
+      caption: clean(p.caption, 200), source: p.source === "capture" || p.source === "paste" ? p.source : "upload", url: clean(p.url, 500),
+      order: this.db.screenshots.filter((x) => x.appId === app.id).length, createdAt: nowIso(), createdBy: user.name,
+    };
+    this.db.screenshots.push(shot);
+    if (p.setCover || !app.coverShotId) app.coverShotId = shot.id;
+    this.touch(app);
+    this.log(ctx, shot.source === "capture" ? "capture" : "upload", "screenshot", shot.id, app,
+      shot.source === "capture" ? `Captured a screenshot of ${app.name}${shot.url ? ` from ${shot.url}` : ""}` : `Added a screenshot to ${app.name}${shot.caption ? ` — ${shot.caption}` : ""}`);
+    const { dataUrl: _d, ...meta } = shot;
+    return meta as ScreenshotMeta;
+  }
+
+  /** Raw image bytes for the server's /api/shot/:id route (view permission required). */
+  screenshotFor(user: UserRecord, id: string) {
+    const shot = this.db.screenshots.find((x) => x.id === id);
+    if (!shot) return null;
+    const app = this.db.apps.find((a) => a.id === shot.appId);
+    if (!app || !this.permission(user, app)) return null;
+    return shot;
+  }
+
+  async persistNow() {
+    await this.persist();
   }
 
   /* ---------------------------------------------------- handlers ---------------------------------------------------- */
@@ -330,6 +373,7 @@ export class Service {
         docs: this.db.docs.filter((d) => d.appId === app.id).sort((a, b) => a.order - b.order),
         releases: this.db.releases.filter((r) => r.appId === app.id).sort((a, b) => (a.date < b.date ? 1 : -1)),
         attachments: this.db.attachments.filter((f) => f.appId === app.id).map(({ dataUrl: _d, ...meta }) => meta as AttachmentMeta),
+        screenshots: this.db.screenshots.filter((x) => x.appId === app.id).sort((a, b) => a.order - b.order).map(({ dataUrl: _d, ...meta }) => meta as ScreenshotMeta),
         activity: this.db.logs.filter((l) => l.appId === app.id).slice(0, 60),
       };
       return detail;
@@ -363,7 +407,7 @@ export class Service {
       if (ctx.user.role === "viewer") throw new ApiError(403, "Viewers can't delete applications.");
       const id = app.id;
       this.db.apps = this.db.apps.filter((a) => a.id !== id);
-      for (const key of ["groups", "tasks", "usage", "launches", "docs", "releases", "attachments", "favorites"] as const) {
+      for (const key of ["groups", "tasks", "usage", "launches", "docs", "releases", "attachments", "screenshots", "favorites"] as const) {
         (this.db[key] as { appId: string }[]) = (this.db[key] as { appId: string }[]).filter((x) => x.appId !== id);
       }
       this.log(ctx, "delete", "app", id, app, `Deleted application ${app.name}`);
@@ -706,6 +750,57 @@ export class Service {
       this.log(ctx, "delete", "file", file.id, app, `Deleted file ${file.name}`);
     }, { write: true });
 
+    /* ---------- screenshots ---------- */
+    this.on("shots.add", (ctx, p) => this.addScreenshot(ctx.user, p.appId, p), { write: true });
+
+    this.on("shots.get", (ctx, p) => {
+      const shot = this.screenshotFor(ctx.user, p.id);
+      if (!shot) throw new ApiError(404, "Screenshot not found.");
+      return shot;
+    });
+
+    this.on("shots.update", (ctx, p) => {
+      const shot = this.db.screenshots.find((x) => x.id === p.id);
+      if (!shot) throw new ApiError(404, "Screenshot not found.");
+      const app = this.app(ctx, shot.appId, "edit");
+      const before = shot.caption;
+      shot.caption = clean(p.caption, 200);
+      if (before !== shot.caption) this.log(ctx, "update", "screenshot", shot.id, app, `Captioned a screenshot “${shot.caption}”`, [{ field: "caption", from: before, to: shot.caption }]);
+      const { dataUrl: _d, ...meta } = shot;
+      return meta;
+    }, { write: true });
+
+    this.on("shots.cover", (ctx, p) => {
+      const shot = this.db.screenshots.find((x) => x.id === p.id);
+      if (!shot) throw new ApiError(404, "Screenshot not found.");
+      const app = this.app(ctx, shot.appId, "edit");
+      app.coverShotId = shot.id;
+      this.touch(app);
+      this.log(ctx, "update", "app", app.id, app, `Changed the cover image of ${app.name}`);
+    }, { write: true });
+
+    this.on("shots.move", (ctx, p: { id: string; dir: -1 | 1 }) => {
+      const shot = this.db.screenshots.find((x) => x.id === p.id);
+      if (!shot) throw new ApiError(404, "Screenshot not found.");
+      this.app(ctx, shot.appId, "edit");
+      const list = this.db.screenshots.filter((x) => x.appId === shot.appId).sort((a, b) => a.order - b.order);
+      const i = list.indexOf(shot);
+      const j = i + (p.dir < 0 ? -1 : 1);
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j]!, list[i]!];
+      list.forEach((x, k) => (x.order = k));
+    }, { write: true });
+
+    this.on("shots.delete", (ctx, p) => {
+      const shot = this.db.screenshots.find((x) => x.id === p.id);
+      if (!shot) throw new ApiError(404, "Screenshot not found.");
+      const app = this.app(ctx, shot.appId, "edit");
+      this.db.screenshots = this.db.screenshots.filter((x) => x.id !== shot.id);
+      if (app.coverShotId === shot.id) app.coverShotId = null;
+      this.touch(app);
+      this.log(ctx, "delete", "screenshot", shot.id, app, `Deleted a screenshot${shot.caption ? ` “${shot.caption}”` : ""}`);
+    }, { write: true });
+
     /* ---------- logs ---------- */
     this.on("logs.list", (ctx, p: { appId?: string; userId?: string; action?: string; entity?: string; q?: string; from?: string; to?: string; limit?: number; offset?: number }): Paged<LogEntry> => {
       const visible = new Set(this.visibleApps(ctx.user).map((a) => a.id));
@@ -848,7 +943,7 @@ export class Service {
     const now = nowIso();
     const app: App = {
       id: uid(), name: "", code: "", tagline: "", description: "", category: "Internal tool", department: "", status: "planning", priority: "medium",
-      url: "", repoUrl: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", tone: ((this.db.apps.length % 5) + 1) as Tone,
+      url: "", repoUrl: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, tone: ((this.db.apps.length % 5) + 1) as Tone,
       startDate: ymd(), goLiveDate: "", visibility: "public", acl: {}, createdAt: now, updatedAt: now, createdBy: ctx.user.id,
     };
     this.applyAppFields(app, p);

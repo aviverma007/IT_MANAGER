@@ -63,6 +63,7 @@ export interface App {
   ownerId: string | null;
   version: string;
   cover: string;
+  coverShotId: string | null;
   tone: Tone;
   startDate: string;
   goLiveDate: string;
@@ -151,6 +152,24 @@ export interface Attachment {
 
 export type AttachmentMeta = Omit<Attachment, "dataUrl">;
 
+/** A real screenshot of an application — uploaded, pasted from the clipboard or captured from its link by the server. */
+export interface Screenshot {
+  id: string;
+  appId: string;
+  dataUrl: string;
+  width: number;
+  height: number;
+  caption: string;
+  source: "upload" | "paste" | "capture";
+  url: string; // page it was captured from (capture only)
+  order: number;
+  createdAt: string;
+  createdBy: string;
+}
+
+export type ScreenshotMeta = Omit<Screenshot, "dataUrl">;
+export type CoverShot = { id: string; width: number; height: number } | null;
+
 export interface Change {
   field: string;
   from: unknown;
@@ -183,6 +202,7 @@ export interface DB {
   docs: Doc[];
   releases: Release[];
   attachments: Attachment[];
+  screenshots: Screenshot[];
   favorites: { userId: string; appId: string }[];
   logs: LogEntry[];
 }
@@ -210,6 +230,8 @@ export interface AppSummary extends App {
   favorite: boolean;
   ownerName: string;
   docCount: number;
+  coverShot: CoverShot;
+  shotCount: number;
 }
 
 export interface AppDetail extends AppSummary {
@@ -219,6 +241,7 @@ export interface AppDetail extends AppSummary {
   docs: Doc[];
   releases: Release[];
   attachments: AttachmentMeta[];
+  screenshots: ScreenshotMeta[];
   activity: LogEntry[];
 }
 

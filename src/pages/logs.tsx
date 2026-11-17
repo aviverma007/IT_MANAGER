@@ -12,7 +12,7 @@ import { EmptyState, GlassCard, Skeleton } from "@/components/ui/bits";
 import { ACTION_META, ActionIcon } from "@/components/app/activity";
 import { cn, fmtDateTime } from "@/lib/utils";
 
-const ENTITIES = ["app", "task", "group", "usage", "doc", "release", "file", "user", "session", "backup"];
+const ENTITIES = ["app", "task", "group", "usage", "doc", "release", "file", "screenshot", "user", "session", "backup"];
 const PAGE = 40;
 
 function show(v: unknown) {

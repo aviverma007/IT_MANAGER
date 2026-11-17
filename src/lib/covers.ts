@@ -1,5 +1,7 @@
 // Generated artwork: every app gets a unique cover and every user an avatar, with no network images required.
 import { TONE_HEX, initials } from "./utils";
+import { shotSrc } from "@/api/client";
+import type { CoverShot } from "@/core/types";
 
 function hash(text: string) {
   let h = 2166136261;
@@ -24,7 +26,13 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 const svgUri = (svg: string) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 const cache = new Map<string, string>();
 
-export function coverFor(app: { id: string; name: string; code?: string; tone: number; cover?: string }, w = 800, h = 1000) {
+export function hasRealCover(app: { cover?: string; coverShot?: CoverShot }) {
+  return !!(app.coverShot || app.cover);
+}
+
+/** The application's real screenshot when it has one; otherwise its uploaded/linked cover; otherwise generated art. */
+export function coverFor(app: { id: string; name: string; code?: string; tone: number; cover?: string; coverShot?: CoverShot }, w = 800, h = 1000) {
+  if (app.coverShot) return shotSrc(app.coverShot.id);
   if (app.cover) return app.cover;
   const key = `${app.id}:${app.name}:${app.tone}:${w}x${h}`;
   const hit = cache.get(key);

@@ -1,5 +1,6 @@
 import * as React from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import { shotSrc } from "@/api/client";
 import remarkGfm from "remark-gfm";
 import { slug } from "@/core/util";
 
@@ -12,7 +13,13 @@ export function Markdown({ source }: { source: string }) {
     <div className="prose-doc">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => (url.startsWith("shot:") ? url : defaultUrlTransform(url))}
         components={{
+          // ![caption](shot:<id>) embeds one of the application's screenshots
+          img: ({ src, alt }) => {
+            const s = String(src ?? "");
+            return <img src={s.startsWith("shot:") ? shotSrc(s.slice(5)) : s} alt={alt ?? ""} loading="lazy" />;
+          },
           h1: ({ children }) => <h1 id={slug(text(children))}>{children}</h1>,
           h2: ({ children }) => <h2 id={slug(text(children))}>{children}</h2>,
           h3: ({ children }) => <h3 id={slug(text(children))}>{children}</h3>,

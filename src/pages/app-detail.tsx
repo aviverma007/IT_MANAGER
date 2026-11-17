@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import {
-  Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, GitBranch, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff,
+  Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, GitBranch, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff,
 } from "lucide-react";
 import { useApp, useRun } from "@/api/hooks";
 import { pingUrl } from "@/api/client";
@@ -22,8 +22,10 @@ import { ReleasesTab } from "@/components/app/tabs/releases";
 import { FilesTab } from "@/components/app/tabs/files";
 import { AccessTab } from "@/components/app/tabs/access";
 import { ActivityTab } from "@/components/app/tabs/activity";
+import { BrowserFrame, ScreensTab } from "@/components/app/tabs/screens";
+import { shotSrc } from "@/api/client";
 
-const TABS = ["overview", "tasks", "usage", "docs", "releases", "files", "access", "activity"] as const;
+const TABS = ["overview", "screens", "tasks", "usage", "docs", "releases", "files", "access", "activity"] as const;
 type Tab = (typeof TABS)[number];
 
 function Health({ appId, url }: { appId: string; url: string }) {
@@ -74,10 +76,18 @@ export default function AppDetailPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden rounded-[2rem] border border-border shadow-2xl">
-        <motion.img layoutId={`cover-${app.id}`} src={coverFor(app, 1600, 700)} alt="" style={{ y: heroY, scale: heroScale }} className="absolute inset-0 size-full object-cover" />
+        <motion.img layoutId={`cover-${app.id}`} src={coverFor(app, 1600, 700)} alt="" style={{ y: heroY, scale: heroScale }} className={cn("absolute inset-0 size-full object-cover object-top", app.coverShot && "scale-110 blur-md")} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/20" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,transparent,rgb(0_0_0/0.4))]" />
-        <div className="relative flex flex-col gap-6 p-6 pt-24 text-white md:flex-row md:items-end md:p-8 md:pt-32">
+        {app.coverShot && (
+          <motion.button onClick={() => setTab("screens")} aria-label="Open screenshots"
+            initial={{ opacity: 0, x: 60, rotateY: -25 }} animate={{ opacity: 1, x: 0, rotateY: -14 }} whileHover={{ rotateY: -4, scale: 1.03 }} transition={{ type: "spring", stiffness: 140, damping: 18 }}
+            style={{ transformPerspective: 1400 }} className="absolute right-8 top-8 hidden w-[38%] max-w-xl origin-right xl:block">
+            <BrowserFrame src={shotSrc(app.coverShot.id)} url={app.url} />
+            {app.screenshots.length > 1 && <span className="absolute -bottom-3 left-4 rounded-full border border-white/20 bg-black/60 px-3 py-1 text-[11px] text-white backdrop-blur-md">+{app.screenshots.length - 1} more screens</span>}
+          </motion.button>
+        )}
+        <div className={cn("relative flex flex-col gap-6 p-6 pt-24 text-white md:flex-row md:items-end md:p-8 md:pt-32", app.coverShot && "xl:pt-[22rem]")}>
           <div className="min-w-0 flex-1">
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-3 flex flex-wrap items-center gap-2">
               <StatusBadge status={app.status} className="backdrop-blur-md" />
@@ -108,8 +118,9 @@ export default function AppDetailPage() {
       </section>
 
       <div className="sticky top-[5.5rem] z-20">
-        <Tabs id="app-tabs" value={tab} onChange={setTab} className="glass max-w-full !bg-[var(--glass)]" tabs={[
+        <Tabs id="app-tabs" value={tab} onChange={setTab} className="glass max-w-full !bg-[color-mix(in_oklab,var(--background)_85%,transparent)]" tabs={[
           { value: "overview", label: "Overview", icon: <LayoutDashboard /> },
+          { value: "screens", label: "Screens", icon: <Camera />, count: app.screenshots.length },
           { value: "tasks", label: "Tasks", icon: <CheckSquare />, count: app.tasksTotal - app.tasksDone },
           { value: "usage", label: "Usage", icon: <Activity /> },
           { value: "docs", label: "Docs & manual", icon: <BookOpen />, count: app.docs.length },
@@ -123,6 +134,7 @@ export default function AppDetailPage() {
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0, x: 24, filter: "blur(4px)" }} animate={{ opacity: 1, x: 0, filter: "blur(0px)" }} exit={{ opacity: 0, x: -24, filter: "blur(4px)" }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
           {tab === "overview" && <OverviewTab app={app} onTab={setTab} />}
+          {tab === "screens" && <ScreensTab app={app} />}
           {tab === "tasks" && <TasksTab app={app} />}
           {tab === "usage" && <UsageTab app={app} />}
           {tab === "docs" && <DocsTab app={app} />}

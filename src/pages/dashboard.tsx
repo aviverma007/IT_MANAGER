@@ -35,7 +35,7 @@ export default function DashboardPage() {
     const list = [...(apps ?? [])].sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.usage.sessions30 - a.usage.sessions30 || b.progress - a.progress).slice(0, 8);
     const prints: PictureRailItem[] = list.map((a, i) => ({
       id: a.id, title: a.name, artist: a.ownerName || a.department, year: a.version ? `v${a.version}` : STATUS_META[a.status].label,
-      image: coverFor(a, 800, 1000), aspect: i % 3 === 1 ? 1 : 0.8, frame: FRAMES[i % 3], mat: i % 2 === 0, drop: [0.04, 0.12, -0.02, 0.16, 0.06, 0, 0.1, 0.03][i] ?? 0,
+      image: coverFor(a, 800, 1000), aspect: a.coverShot ? Math.min(1.9, Math.max(0.55, a.coverShot.width / a.coverShot.height)) : i % 3 === 1 ? 1 : 0.8, frame: FRAMES[i % 3], mat: i % 2 === 0, drop: [0.04, 0.12, -0.02, 0.16, 0.06, 0, 0.1, 0.03][i] ?? 0,
       tag: `${a.progress}%`, details: [STATUS_META[a.status].label, a.category, `${a.tasksDone}/${a.tasksTotal} tasks done`, `${fmtNumber(a.usage.sessions30)} sessions · 30 days`],
     }));
     return { list, prints };
@@ -226,7 +226,7 @@ export default function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {apps.filter((a) => a.favorite).map((a) => (
               <motion.button key={a.id} whileHover={{ y: -4 }} whileTap={{ scale: 0.97 }} onClick={() => (a.url ? openApp(a) : navigate(`/apps/${a.id}`))} className="glass flex items-center gap-3 rounded-2xl p-3 text-left">
-                <img src={coverFor(a, 120, 120)} alt="" className="size-11 rounded-xl object-cover" />
+                <img src={coverFor(a, 120, 120)} alt="" className="h-11 w-16 rounded-xl border border-border object-cover object-top" />
                 <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{a.name}</div><StatusBadge status={a.status} className="mt-1" /></div>
                 {a.url ? <ExternalLink className="size-4 text-muted-foreground" /> : <ArrowRight className="size-4 text-muted-foreground" />}
               </motion.button>

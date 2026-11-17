@@ -10,6 +10,8 @@ import { APP_STATUSES, PRIORITIES, type AppSummary, type EnvLink, type Tone } fr
 import { cn, imageToDataUrl, STATUS_META, TONE_HEX } from "@/lib/utils";
 import { coverFor } from "@/lib/covers";
 import { toast } from "sonner";
+import { call, CAN_CAPTURE } from "@/api/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Form = {
   name: string; code: string; tagline: string; description: string; category: string; department: string; status: string; priority: string;
@@ -33,6 +35,7 @@ function fromApp(a: AppSummary): Form {
 
 export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; onClose: () => void; app?: AppSummary; onSaved?: (id: string) => void }) {
   const run = useRun();
+  const qc = useQueryClient();
   const { data: users } = useUsers();
   const { data: apps } = useApps();
   const [form, setForm] = React.useState<Form>(blank);
@@ -53,7 +56,18 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
       ? await run<AppSummary>("apps.update", { id: app.id, ...payload }, { success: "Application updated" })
       : await run<AppSummary>("apps.create", payload, { success: `${form.name} added` });
     setBusy(false);
-    if (res) { onClose(); onSaved?.(res.id); }
+    if (res) {
+      onClose();
+      onSaved?.(res.id);
+      // New or changed link and no real screenshot yet → grab one from the live app in the background.
+      const linkChanged = form.url.trim() && form.url !== (app?.url ?? "");
+      if (CAN_CAPTURE && linkChanged && !res.shotCount && res.url) {
+        const id = toast.loading(`Taking a screenshot of ${res.name}…`);
+        call("apps.capture", { id: res.id, setCover: true })
+          .then(() => { toast.success(`Screenshot of ${res.name} saved`, { id }); return qc.invalidateQueries(); })
+          .catch((e: Error) => toast.error(e.message, { id, description: "Add one from the Screens tab instead." }));
+      }
+    }
   }
 
   const preview = coverFor({ id: app?.id ?? "new", name: form.name || "New app", code: form.code, tone: form.tone, cover: form.cover }, 400, 500);
@@ -150,7 +164,7 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
                   ))}
                 </div>
               </Field>
-              <Field label="Cover image link" hint="Paste an image URL, upload one, or keep the generated artwork."><Input value={form.cover.startsWith("data:") ? "(uploaded image)" : form.cover} onChange={(e) => set("cover", e.target.value)} placeholder="https://images.unsplash.com/…" disabled={form.cover.startsWith("data:")} /></Field>
+              <Field label="Fallback cover image link" hint="Only used when the app has no screenshots yet."><Input value={form.cover.startsWith("data:") ? "(uploaded image)" : form.cover} onChange={(e) => set("cover", e.target.value)} placeholder="https://images.unsplash.com/…" disabled={form.cover.startsWith("data:")} /></Field>
               {!app && (
                 <Field label="Visibility" hint="Restricted apps are only visible to admins, the owner and people you grant access to.">
                   <Select value={form.visibility} onChange={(e) => set("visibility", e.target.value as Form["visibility"])}>
@@ -159,6 +173,7 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
                   </Select>
                 </Field>
               )}
+              <p className="deboss flex items-start gap-2 rounded-xl p-3 text-xs text-muted-foreground"><Link2 className="mt-0.5 size-4 shrink-0" />Real screenshots (upload, paste or capture from the link) live in the app's <b className="text-foreground">Screens</b> tab — the starred one becomes the cover everywhere. </p>
               <p className="deboss flex items-start gap-2 rounded-xl p-3 text-xs text-muted-foreground"><Link2 className="mt-0.5 size-4 shrink-0" />Fine-grained edit / view rights per person are set in the application's <b className="text-foreground">Access</b> tab.</p>
             </div>
           </div>

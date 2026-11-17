@@ -247,7 +247,7 @@ export function AppShell() {
         </AnimatePresence>
 
         <div className="min-w-0 flex-1">
-          <header className="glass sticky top-0 z-30 mb-4 flex h-16 items-center gap-3 px-4 lg:top-4 lg:rounded-3xl">
+          <header className="glass sticky top-0 z-30 mb-4 flex h-16 items-center gap-3 !bg-[color-mix(in_oklab,var(--background)_82%,transparent)] px-4 lg:top-4 lg:rounded-3xl">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu /></Button>
             <button onClick={() => setPalette(true)} className="deboss flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-input px-3 text-sm text-muted-foreground transition-colors hover:border-ring sm:max-w-md">
               <Search className="size-4 shrink-0" />

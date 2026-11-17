@@ -3,9 +3,11 @@ import type { App, AppStatus, DB, Doc, Release, Task, TaskGroup, Tone, UsageEntr
 import { hashPassword, newSalt } from "./crypto";
 import { addDays, nowIso, rng, uid, ymd } from "./util";
 import { manualTemplate, technicalTemplate } from "./templates";
+import { IT_MANAGER_SCREENS } from "./seed-screens";
+import type { Screenshot } from "./types";
 
 export function emptyDb(): DB {
-  return { version: 1, users: [], sessions: [], apps: [], groups: [], tasks: [], usage: [], launches: [], docs: [], releases: [], attachments: [], favorites: [], logs: [] };
+  return { version: 1, users: [], sessions: [], apps: [], groups: [], tasks: [], usage: [], launches: [], docs: [], releases: [], attachments: [], screenshots: [], favorites: [], logs: [] };
 }
 
 async function makeUser(p: Pick<UserRecord, "username" | "name" | "email" | "role" | "title" | "department" | "bio" | "tone">, password: string): Promise<UserRecord> {
@@ -68,7 +70,7 @@ export async function sampleDb(): Promise<DB> {
       description: `${s.tagline}. Built and maintained in-house by the IT team for the ${s.department} team.`,
       category: s.category, department: s.department, status: s.status, priority: s.priority, url: "",
       repoUrl: s.repo ? `https://github.com/aviverma007/${s.repo}` : "", environments: [], techStack: s.techStack,
-      ownerId: s.department === "Human Resources" ? nisha.id : admin.id, version: s.version, cover: "", tone: s.tone,
+      ownerId: s.department === "Human Resources" ? nisha.id : admin.id, version: s.version, cover: "", coverShotId: null, tone: s.tone,
       startDate: addDays(today, -(90 + ai * 30)), goLiveDate: ["live", "maintenance"].includes(s.status) ? addDays(today, -(s.months * 30)) : addDays(today, 20 + ai * 9),
       visibility: s.code === "M3M_ONE" ? "restricted" : "public",
       acl: s.code === "M3M_ONE" ? { [editor.id]: "edit" } : s.department === "Accounts" || s.code === "LEASING_SWD" ? { [viewer.id]: "view" } : {},
@@ -131,6 +133,35 @@ export async function sampleDb(): Promise<DB> {
       }
     }
   });
+
+  // IT Manager itself — the one sample app that ships with real screenshots, to show what the Screens tab looks like.
+  {
+    const created = nowIso();
+    const app: App = {
+      id: uid(), name: "IT Manager", code: "IT_MANAGER", tagline: "Portfolio manager for every internal application — progress, usage, docs, rights and audit",
+      description: "One place to list every application the IT team builds or runs: checklist-driven progress, usage tracking, user manuals, release history, real screenshots, per-person access rights and a full audit log.",
+      category: "IT operations", department: "IT", status: "uat", priority: "high", url: "", repoUrl: "https://github.com/aviverma007/IT_MANAGER", environments: [],
+      techStack: ["React", "TypeScript", "Tailwind", "Node.js", "Express"], ownerId: admin.id, version: "1.1.0", cover: "", coverShotId: null, tone: 1,
+      startDate: addDays(today, -1), goLiveDate: addDays(today, 14), visibility: "public", acl: {}, createdAt: created, updatedAt: created, createdBy: admin.id,
+    };
+    db.apps.push(app);
+    const shots: Screenshot[] = IT_MANAGER_SCREENS.map((x, i) => ({ id: uid(), appId: app.id, ...x, source: "capture" as const, url: "http://localhost:4000/", order: i, createdAt: created, createdBy: admin.name }));
+    db.screenshots.push(...shots);
+    app.coverShotId = shots[1]?.id ?? shots[0]?.id ?? null;
+    let n = 0;
+    GROUPS.forEach(([title, tasks], gi) => {
+      const group: TaskGroup = { id: uid(), appId: app.id, title, order: gi, createdAt: created };
+      db.groups.push(group);
+      tasks.forEach(([t, priority], ti) => {
+        const done = n++ < 14;
+        db.tasks.push({ id: uid(), appId: app.id, groupId: group.id, title: t, notes: "", done, doneAt: done ? created : null, doneBy: done ? admin.name : null, assignee: done ? "" : "Anirudh", dueDate: done ? "" : addDays(today, 3 + ti * 3), priority, order: ti, createdAt: created });
+      });
+    });
+    const img = (i: number) => (shots[i] ? `![${shots[i]!.caption}](shot:${shots[i]!.id})` : "");
+    const manual = manualTemplate(app).replace("## 3. Screens at a glance", `## 3. Screens at a glance\n${img(1)}\n\n${img(2)}\n\n${img(3)}\n\n${img(4)}\n`);
+    db.docs.push({ id: uid(), appId: app.id, kind: "manual", title: "User manual", content: manual, order: 0, updatedAt: created, updatedBy: admin.name });
+    db.releases.push({ id: uid(), appId: app.id, version: "1.1.0", date: today, title: "Real screenshots", notes: "- Screens tab: upload, paste or capture from the live link\n- Screenshots used as covers everywhere", createdAt: created });
+  }
 
   db.favorites.push({ userId: admin.id, appId: db.apps[0]!.id }, { userId: admin.id, appId: db.apps[1]!.id }, { userId: admin.id, appId: db.apps[8]!.id });
 

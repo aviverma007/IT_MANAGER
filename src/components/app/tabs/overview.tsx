@@ -5,8 +5,10 @@ import { AnimatedNumber, GlassCard, PriorityDot, ProgressBar, SectionTitle, Spar
 import { ActivityFeed } from "@/components/app/activity";
 import { Button } from "@/components/ui/button";
 import { cn, fmtDate, fmtNumber, timeAgo, toneHex } from "@/lib/utils";
+import { shotSrc } from "@/api/client";
+import { Camera } from "lucide-react";
 
-type TabName = "tasks" | "usage" | "docs" | "releases" | "activity";
+type TabName = "screens" | "tasks" | "usage" | "docs" | "releases" | "activity";
 
 export function OverviewTab({ app, onTab }: { app: AppDetail; onTab: (t: TabName) => void }) {
   const color = toneHex(app.tone);
@@ -41,6 +43,21 @@ export function OverviewTab({ app, onTab }: { app: AppDetail; onTab: (t: TabName
               </motion.div>
             ))}
           </div>
+        </GlassCard>
+
+        <GlassCard className="p-6">
+          <SectionTitle title="Screens" sub={app.screenshots.length ? `${app.screenshots.length} real screenshot${app.screenshots.length > 1 ? "s" : ""}` : "No screenshots yet"} icon={<Camera />} action={<Button size="sm" variant="ghost" onClick={() => onTab("screens")}>{app.screenshots.length ? "Gallery" : "Add"} <ArrowRight /></Button>} />
+          {app.screenshots.length ? (
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {app.screenshots.slice(0, 6).map((s, i) => (
+                <motion.button key={s.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }} whileHover={{ y: -4, scale: 1.02 }} onClick={() => onTab("screens")}
+                  className="w-56 shrink-0 overflow-hidden rounded-xl border border-border text-left shadow-lg">
+                  <img src={shotSrc(s.id)} alt={s.caption} className="aspect-[16/10] w-full object-cover object-top" />
+                  <div className="truncate px-2.5 py-1.5 text-xs text-muted-foreground">{s.caption || "Screen"}</div>
+                </motion.button>
+              ))}
+            </div>
+          ) : <p className="text-sm text-muted-foreground">Upload, paste or capture the real screens of {app.name} in the Screens tab.</p>}
         </GlassCard>
 
         <GlassCard className="p-6">

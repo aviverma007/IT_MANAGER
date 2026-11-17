@@ -42,15 +42,26 @@ class LocalStore implements Store {
 }
 
 let local: Promise<Service> | null = null;
+let localReady: Service | null = null;
 async function localService() {
   if (!local) {
     local = (async () => {
       const { Service } = await import("@/core/service");
-      return new Service(new LocalStore(), { seed: true }).init();
+      localReady = await new Service(new LocalStore(), { seed: true }).init();
+      return localReady;
     })();
   }
   return local;
 }
+
+/** Image URL for a stored screenshot: a file served by the API, or the data itself in the demo build. */
+export function shotSrc(id: string) {
+  if (DEMO) return localReady?.db.screenshots.find((x) => x.id === id)?.dataUrl ?? "";
+  return `/api/shot/${encodeURIComponent(id)}?t=${encodeURIComponent(tokenStore.get() ?? "")}`;
+}
+
+/** Server-side screenshot capture needs a headless browser, so it only exists on the server build. */
+export const CAN_CAPTURE = !DEMO;
 
 function unauthorized() {
   tokenStore.set(null);
