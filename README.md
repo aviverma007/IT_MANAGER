@@ -70,6 +70,8 @@ Environment variables
 * **Capture all at once:** Applications → **Capture screenshots** opens every app that has a link and no screenshot yet, on the server, and saves what users see.
 * **Per app:** Screens tab → **Capture from link**. Tick *Sign in before capturing* to get past a login page (credentials are used once and never stored), and list extra pages (`/dashboard`, `/reports`) to capture inside the same session.
 * Setting or changing an app's link captures a screenshot automatically if it has none.
+* **On start-up the server captures every app that has a link but no screenshot**, and retries every 6 hours (`CAPTURE_RETRY_HOURS`, `0` = off) so apps that were down get picked up later. `CAPTURE_ON_START=false` disables this.
+* The sample data already carries your apps' LAN links (SmartDesk :92, Smart Leasing :96, Dashboard :3000, VendorGlobe :5002 on 192.168.66.28; QMS PR on 192.168.66.34:5002), so running IT Manager anywhere on the office network fills their screenshots on first start.
 * For screens a script can't reach, snip with **Win + Shift + S** and press **Ctrl + V** on the Screens tab, or drag files in.
 
 The server must be able to reach the app's link (same network / VPN). Screenshots are served from `/api/shot/:id` and stored with the rest of the data.

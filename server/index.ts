@@ -214,6 +214,33 @@ if (fs.existsSync(DIST)) {
   app.use((req, res, next) => (req.method === "GET" && !req.path.startsWith("/api") ? res.sendFile(path.join(DIST, "index.html")) : next()));
 }
 
+/* Automatic capture: any app that has a link but no screenshot is captured shortly after start-up and
+   retried every CAPTURE_RETRY_HOURS (apps that were down get picked up later). CAPTURE_ON_START=false turns it off. */
+async function captureMissing() {
+  const admin = service.db.users.find((u) => u.role === "admin" && u.active);
+  if (!admin) return;
+  const targets = service.db.apps.filter((a) => /^https?:/i.test(a.url) && !service.db.screenshots.some((x) => x.appId === a.id));
+  if (!targets.length) return;
+  console.log(`[capture] ${targets.length} app(s) without screenshots — capturing…`);
+  let done = 0;
+  for (const a of targets) {
+    try {
+      const [shot] = await capture(a.url, { delay: 2000 });
+      service.addScreenshot(admin, a.id, { ...shot!, source: "capture", caption: shot!.title || a.name, setCover: true });
+      done++;
+      console.log(`[capture] ✓ ${a.name}`);
+    } catch (e) {
+      console.log(`[capture] ✗ ${a.name}: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+  if (done) await service.persistNow();
+}
+if (process.env.CAPTURE_ON_START !== "false") {
+  setTimeout(() => void captureMissing().catch((e) => console.log("[capture]", e.message)), 4000);
+  const hours = Number(process.env.CAPTURE_RETRY_HOURS ?? 6);
+  if (hours > 0) setInterval(() => void captureMissing().catch(() => undefined), hours * 3600e3).unref();
+}
+
 process.on("SIGINT", async () => { try { await (await browserPromise)?.close(); } catch { /* ignore */ } process.exit(0); });
 
 app.listen(PORT, () => {
