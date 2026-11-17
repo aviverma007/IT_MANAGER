@@ -44,6 +44,25 @@ function fail(res: express.Response, e: unknown) {
   return res.status(500).json({ error: "Something went wrong on the server." });
 }
 
+/* ----------------------------- live refresh ----------------------------- */
+// Server-Sent Events: every open browser keeps one connection and is told about each saved change,
+// so lists, dashboards and task boards update on everyone's screen within a second.
+const clients = new Set<{ res: express.Response; userId: string }>();
+app.get("/api/events", (req, res) => {
+  const user = service.authenticate((req.query.t as string) || tokenOf(req));
+  if (!user) return res.status(401).end();
+  res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no" });
+  res.write(`event: hello\ndata: ${JSON.stringify({ online: clients.size + 1 })}\n\n`);
+  const client = { res, userId: user.id };
+  clients.add(client);
+  const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
+  req.on("close", () => { clearInterval(ping); clients.delete(client); });
+});
+service.onChange((e) => {
+  const data = `event: change\ndata: ${JSON.stringify(e)}\n\n`;
+  for (const c of clients) c.res.write(data);
+});
+
 /* ----------------------------- screenshots ----------------------------- */
 // Real images of each application. Served as files (not inlined in JSON) so lists stay light.
 app.get("/api/shot/:id", (req, res) => {
@@ -144,6 +163,7 @@ app.post("/api/apps.capture", async (req, res) => {
     catch (e) { throw new ApiError(502, `Couldn't capture ${url}: ${(e as Error).message.split("\n")[0]}`); }
     const metas = shots.map((shot, i) => service.addScreenshot(user, target.id, { ...shot, source: "capture", caption: shot.title || "", setCover: !!req.body?.setCover && i === 0 }));
     await service.persistNow();
+    service.emitChange({ method: "apps.capture", userId: user.id, userName: user.name, appId: target.id, summary: `Captured ${metas.length} screenshot(s) of ${target.name}`, at: new Date().toISOString() });
     res.json({ shots: metas });
   } catch (e) {
     fail(res, e);
@@ -170,6 +190,7 @@ app.post("/api/apps.captureAll", async (req, res) => {
       }
     }));
     await service.persistNow();
+    if (result.captured) service.emitChange({ method: "apps.captureAll", userId: user.id, userName: user.name, appId: null, summary: `Captured ${result.captured} screenshot(s)`, at: new Date().toISOString() });
     res.json(result);
   } catch (e) {
     fail(res, e);
@@ -233,7 +254,10 @@ async function captureMissing() {
       console.log(`[capture] ✗ ${a.name}: ${(e as Error).message.split("\n")[0]}`);
     }
   }
-  if (done) await service.persistNow();
+  if (done) {
+    await service.persistNow();
+    service.emitChange({ method: "apps.captureAll", userId: "system", userName: "System", appId: null, summary: `Captured ${done} screenshot(s)`, at: new Date().toISOString() });
+  }
 }
 if (process.env.CAPTURE_ON_START !== "false") {
   setTimeout(() => void captureMissing().catch((e) => console.log("[capture]", e.message)), 4000);

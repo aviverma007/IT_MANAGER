@@ -54,6 +54,15 @@ async function localService() {
   return local;
 }
 
+/** Demo build: another tab changed the data — reload it from localStorage into this tab's in-memory service. */
+export function reloadLocalDb() {
+  if (!DEMO || !localReady) return;
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) localReady.db = JSON.parse(raw);
+  } catch { /* ignore */ }
+}
+
 /** Image URL for a stored screenshot: a file served by the API, or the data itself in the demo build. */
 export function shotSrc(id: string) {
   if (DEMO) return localReady?.db.screenshots.find((x) => x.id === id)?.dataUrl ?? "";

@@ -22,6 +22,7 @@ An application-portfolio manager for the IT team. List every application you bui
 | **Team** | Lanyard-rail of user badges (flip for bio & contact) + cards with role, apps owned, avg progress |
 | **Users & rights** | Admin: create users, change role, deactivate, reset password, delete |
 | **Settings** | Profile (photo, bio, badge colour), password, dark/light theme, import templates, backup / restore / reload sample / start fresh |
+| **Live refresh** | Every saved change is pushed to all open screens instantly (Server-Sent Events): lists, dashboard, tasks and usage update without reloading, with a toast saying who changed what. “Live” badge in the top bar; if the connection drops it falls back to refreshing every 30 s and reconnects by itself |
 | **Extras** | Ctrl/⌘ K command palette, user guide page, toasts, confirm dialogs, responsive mobile layout, reduced-motion support |
 
 ### Roles

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, StatusBadge } from "@/components/ui/bits";
 import { coverFor } from "@/lib/covers";
 import { AppFormModal } from "./app-form";
+import { useLiveSync } from "@/api/live";
 import type { AppStatus } from "@/core/types";
 
 /* ---------------- theme ---------------- */
@@ -218,6 +219,7 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [palette, setPalette] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
+  const live = useLiveSync(me.id);
 
   React.useEffect(() => { try { localStorage.setItem("itm.sidebar", collapsed ? "1" : "0"); } catch { /* ignore */ } }, [collapsed]);
   React.useEffect(() => {
@@ -255,6 +257,15 @@ export function AppShell() {
               <kbd className="ml-auto hidden rounded-md border border-border px-1.5 py-0.5 text-[10px] sm:inline">Ctrl K</kbd>
             </button>
             <div className="ml-auto flex items-center gap-2">
+              <span title={live.status === "live" ? `Live — changes from everyone appear instantly${live.online ? ` · ${live.online} screen(s) connected` : ""}` : "Reconnecting — refreshing every 30 seconds meanwhile"}
+                className={cn("hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:inline-flex",
+                  live.status === "live" ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "border-amber-400/30 bg-amber-500/10 text-amber-600 dark:text-amber-300")}>
+                <span className="relative flex size-2">
+                  <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-70", live.status === "live" ? "bg-emerald-400" : "bg-amber-400")} />
+                  <span className={cn("relative inline-flex size-2 rounded-full", live.status === "live" ? "bg-emerald-500" : "bg-amber-500")} />
+                </span>
+                {live.status === "live" ? "Live" : "Reconnecting"}
+              </span>
               {DEMO && <span className="hidden rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-300 md:inline">Demo · data saved in this browser</span>}
               <Button variant="secondary" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
                 <AnimatePresence mode="wait" initial={false}>

@@ -14,6 +14,15 @@ export interface Store {
   save(db: DB): Promise<void>;
 }
 
+export interface ChangeEvent {
+  method: string;
+  userId: string;
+  userName: string;
+  appId: string | null;
+  summary: string;
+  at: string;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -66,6 +75,15 @@ export class Service {
   db: DB = emptyDb();
   private saving: Promise<void> = Promise.resolve();
   private methods: Record<string, { handler: Handler; public?: boolean; write?: boolean }> = {};
+  /** Live-refresh listeners: called after every saved change (the server fans this out to open browsers). */
+  private listeners = new Set<(e: ChangeEvent) => void>();
+  onChange(fn: (e: ChangeEvent) => void) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+  emitChange(e: ChangeEvent) {
+    for (const fn of this.listeners) { try { fn(e); } catch { /* a dead listener must not break writes */ } }
+  }
 
   constructor(private store: Store, private options: { seed: boolean } = { seed: true }) {
     this.register();
@@ -103,7 +121,11 @@ export class Service {
     const user = this.authenticate(token);
     if (!user) throw new ApiError(401, "Your session has expired. Please sign in again.");
     const result = await def.handler({ user }, params ?? {});
-    if (def.write) await this.persist();
+    if (def.write) {
+      await this.persist();
+      const last = this.db.logs[0];
+      this.emitChange({ method, userId: user.id, userName: user.name, appId: last?.appId ?? null, summary: last && last.userId === user.id ? last.summary : "", at: nowIso() });
+    }
     return result;
   }
 
