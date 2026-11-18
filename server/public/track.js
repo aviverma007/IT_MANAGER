@@ -28,12 +28,13 @@
       return sid;
     }
 
-    var FIELDS = ["employeeCode", "empCode", "emp_code", "EmpCode", "EmployeeCode", "empId", "employeeId", "code", "username", "userName", "UserName", "email", "Email", "name", "Name", "id"];
+    var FIELDS = ["employeeCode", "empCode", "emp_code", "EmpCode", "EmployeeCode", "empId", "employeeId", "userId", "code", "username", "userName", "UserName", "email", "Email", "displayName", "userLabel", "name", "Name", "id"];
     function pick(v) {
       if (!v) return "";
       try {
         var o = JSON.parse(v);
         if (o && typeof o === "object") {
+          if (o.state && typeof o.state === "object") o = o.state; // zustand persist / redux-persist shape
           var src = o.user && typeof o.user === "object" ? o.user : o.employee && typeof o.employee === "object" ? o.employee : o;
           for (var i = 0; i < FIELDS.length; i++) if (src[FIELDS[i]] && typeof src[FIELDS[i]] !== "object") return String(src[FIELDS[i]]);
           return "";
