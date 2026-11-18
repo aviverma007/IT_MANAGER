@@ -234,14 +234,18 @@ export class Service {
     };
   }
 
-  /** Map a typed/imported assignee to a real user's full name; unknown names → "" (tasks only point at real users). */
+  /** Map typed/imported assignees ("Priya, rahul; anirudh") to real users' full names. Unknown names are dropped. */
   assigneeName(raw: unknown, users = this.db.users) {
-    const v = clean(raw, 120).toLowerCase();
-    if (!v) return "";
-    const exact = users.find((u) => u.name.toLowerCase() === v || u.username.toLowerCase() === v || (u.email && u.email.toLowerCase() === v));
-    if (exact) return exact.name;
-    const byFirst = users.filter((u) => u.name.split(/\s+/)[0]!.toLowerCase() === v);
-    return byFirst.length === 1 ? byFirst[0]!.name : "";
+    const one = (v: string) => {
+      v = v.trim().toLowerCase();
+      if (!v) return "";
+      const exact = users.find((u) => u.name.toLowerCase() === v || u.username.toLowerCase() === v || (u.email && u.email.toLowerCase() === v));
+      if (exact) return exact.name;
+      const byFirst = users.filter((u) => u.name.split(/\s+/)[0]!.toLowerCase() === v);
+      return byFirst.length === 1 ? byFirst[0]!.name : "";
+    };
+    const list = (Array.isArray(raw) ? raw.map(String) : String(raw ?? "").split(/[,;|]/)).map(one).filter(Boolean);
+    return [...new Set(list)].join(", ").slice(0, 400);
   }
 
   private coverShot(app: App): CoverShot {
@@ -438,7 +442,7 @@ export class Service {
           if (!p.active) this.db.sessions = this.db.sessions.filter((s) => s.userId !== user.id);
         }
       }
-      if (before.name !== user.name) for (const t of this.db.tasks) if (t.assignee === before.name) t.assignee = user.name;
+      if (before.name !== user.name) for (const t of this.db.tasks) if (t.assignee) t.assignee = t.assignee.split(", ").map((n) => (n === before.name ? user.name : n)).join(", ");
       const changes = diff(before, user, [...USER_EDITABLE, "role", "active"]);
       if (changes.length) this.log(ctx, "update", "user", user.id, null, `Updated user ${user.name}`, changes);
       return publicUser(user);
@@ -472,7 +476,7 @@ export class Service {
       this.db.users = this.db.users.filter((u) => u.id !== p.id);
       this.db.sessions = this.db.sessions.filter((s) => s.userId !== p.id);
       this.db.favorites = this.db.favorites.filter((f) => f.userId !== p.id);
-      for (const t of this.db.tasks) if (t.assignee === user.name) t.assignee = "";
+      for (const t of this.db.tasks) if (t.assignee) t.assignee = t.assignee.split(", ").filter((n) => n !== user.name).join(", ");
       for (const a of this.db.apps) {
         if (a.ownerId === p.id) a.ownerId = null;
         delete a.acl[p.id];
@@ -934,15 +938,17 @@ export class Service {
     this.on("usage.live", (ctx, p) => { this.app(ctx, p.appId, "view"); return this.liveUsage(p.appId); });
 
     /* ---------- logs ---------- */
-    this.on("logs.list", (ctx, p: { appId?: string; userId?: string; action?: string; entity?: string; q?: string; from?: string; to?: string; limit?: number; offset?: number }): Paged<LogEntry> => {
+    this.on("logs.list", (ctx, p: { appId?: string | string[]; userId?: string | string[]; action?: string | string[]; entity?: string | string[]; q?: string; from?: string; to?: string; limit?: number; offset?: number }): Paged<LogEntry> => {
+      const set = (v: string | string[] | undefined) => (Array.isArray(v) ? (v.length ? new Set(v) : null) : v ? new Set([v]) : null);
+      const apps = set(p.appId), users = set(p.userId), actions = set(p.action), entities = set(p.entity);
       const visible = new Set(this.visibleApps(ctx.user).map((a) => a.id));
       const q = (p.q ?? "").toLowerCase();
       const items = this.db.logs.filter((l) => {
         if (ctx.user.role !== "admin" && !(l.appId ? visible.has(l.appId) : l.userId === ctx.user.id)) return false;
-        if (p.appId && l.appId !== p.appId) return false;
-        if (p.userId && l.userId !== p.userId) return false;
-        if (p.action && l.action !== p.action) return false;
-        if (p.entity && l.entity !== p.entity) return false;
+        if (apps && !apps.has(l.appId ?? "")) return false;
+        if (users && !users.has(l.userId ?? "")) return false;
+        if (actions && !actions.has(l.action)) return false;
+        if (entities && !entities.has(l.entity)) return false;
         if (p.from && l.at < p.from) return false;
         if (p.to && l.at > p.to + "T23:59:59.999Z") return false;
         if (q && !`${l.summary} ${l.userName} ${l.appName ?? ""}`.toLowerCase().includes(q)) return false;

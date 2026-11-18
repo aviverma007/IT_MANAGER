@@ -1,18 +1,18 @@
 import { useUsers } from "@/api/hooks";
-import { Select } from "@/components/ui/field";
+import { MultiSelect } from "@/components/ui/multi-select";
 
-/** Assignee picker: only real IT Manager users (active ones), stored by full name. */
+export const splitAssignees = (v: string) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
+
+/** Assignee picker: one or more real IT Manager users (active ones), stored as "Name A, Name B". */
 export function AssigneeSelect({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
   const { data: users } = useUsers();
   const active = (users ?? []).filter((u) => u.active).sort((a, b) => a.name.localeCompare(b.name));
-  const known = !value || active.some((u) => u.name === value);
-  return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
-      <option value="">Unassigned</option>
-      {active.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-      {!known && <option value={value}>{value} (not a user)</option>}
-    </Select>
-  );
+  const picked = splitAssignees(value);
+  const options = [
+    ...active.map((u) => ({ value: u.name, label: u.name, hint: u.role })),
+    ...picked.filter((n) => !active.some((u) => u.name === n)).map((n) => ({ value: n, label: `${n} (not a user)` })),
+  ];
+  return <MultiSelect options={options} value={picked} onChange={(v) => onChange(v.join(", "))} placeholder="Unassigned" label="Assignees" className={className} />;
 }
 
 /** Names for filters: your users, in alphabetical order. */

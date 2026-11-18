@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { AnimatedNumber, Checkbox, EmptyState, GlassCard, PriorityDot, Skeleton, Tabs } from "@/components/ui/bits";
 import { Modal } from "@/components/ui/modal";
-import { AssigneeSelect, useAssigneeNames } from "@/components/app/assignee";
+import { AssigneeSelect, splitAssignees, useAssigneeNames } from "@/components/app/assignee";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { cn, fmtDate, PRIORITY_META, toneHex } from "@/lib/utils";
 
 type Status = "open" | "overdue" | "week" | "done" | "all";
@@ -52,7 +53,7 @@ function TaskLine({ t, done, onToggle, showApp = true }: { t: TaskRow; done: boo
           {t.notes && <span className="truncate italic">· {t.notes.slice(0, 60)}</span>}
         </div>
       </Link>
-      {t.assignee && <span className="hidden items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground sm:inline-flex"><User className="size-3" />{t.assignee}</span>}
+      {t.assignee && <span className="hidden max-w-48 items-center gap-1 truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground sm:inline-flex" title={t.assignee}><User className="size-3 shrink-0" /><span className="truncate">{splitAssignees(t.assignee).map((n) => n.split(" ")[0]).join(", ")}</span></span>}
       {t.dueDate && !done && <span className={cn("shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-medium", b === "overdue" ? "bg-rose-500/15 text-rose-500" : b === "today" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{fmtDate(t.dueDate, { day: "numeric", month: "short" })}</span>}
       <PriorityDot priority={t.priority} />
     </motion.li>
@@ -106,9 +107,9 @@ export default function TasksPage() {
   const status = (params.get("s") as Status) || "open";
   const [view, setView] = React.useState<View>(() => (localStorage.getItem("itm.tasksView") as View) || "list");
   const [q, setQ] = React.useState("");
-  const [appId, setAppId] = React.useState("");
-  const [assignee, setAssignee] = React.useState("");
-  const [priority, setPriority] = React.useState("");
+  const [appIds, setAppIds] = React.useState<string[]>(() => (params.get("app") ? [params.get("app")!] : []));
+  const [assigneesSel, setAssigneesSel] = React.useState<string[]>([]);
+  const [priorities, setPriorities] = React.useState<string[]>([]);
   const [mine, setMine] = React.useState(false);
   const [pending, setPending] = React.useState<Record<string, boolean>>({});
   const [adding, setAdding] = React.useState(false);
@@ -121,8 +122,9 @@ export default function TasksPage() {
 
   const base = all.filter((t) => {
     const s = q.toLowerCase().trim();
-    return (!appId || t.appId === appId) && (!assignee || (assignee === "__none" ? !t.assignee : t.assignee === assignee)) && (!priority || t.priority === priority) &&
-      (!mine || t.assignee === me.name || myNames.includes(t.assignee.toLowerCase())) &&
+    const people = splitAssignees(t.assignee);
+    return (!appIds.length || appIds.includes(t.appId)) && (!assigneesSel.length || assigneesSel.some((a) => (a === "__none" ? !people.length : people.includes(a)))) && (!priorities.length || priorities.includes(t.priority)) &&
+      (!mine || people.includes(me.name) || people.some((n) => myNames.includes(n.toLowerCase()))) &&
       (!s || `${t.title} ${t.notes} ${t.appName} ${t.groupTitle} ${t.assignee}`.toLowerCase().includes(s));
   });
   const counts = {
@@ -152,7 +154,7 @@ export default function TasksPage() {
 
   const byApp = new Map<string, TaskRow[]>();
   for (const t of list) byApp.set(t.appId, [...(byApp.get(t.appId) ?? []), t]);
-  const filters = [appId, assignee, priority, q, mine ? "1" : ""].filter(Boolean).length;
+  const filters = appIds.length + assigneesSel.length + priorities.length + (q ? 1 : 0) + (mine ? 1 : 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -184,11 +186,11 @@ export default function TasksPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks, notes, apps, people…" className="pl-9" />
         </div>
-        <div className="w-48"><Select value={appId} onChange={(e) => setAppId(e.target.value)}><option value="">All applications</option>{(apps ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></div>
-        <div className="w-40"><Select value={assignee} onChange={(e) => setAssignee(e.target.value)}><option value="">Anyone</option><option value="__none">Unassigned</option>{assignees.map((a) => <option key={a}>{a}</option>)}</Select></div>
-        <div className="w-36"><Select value={priority} onChange={(e) => setPriority(e.target.value)}><option value="">Any priority</option>{PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}</Select></div>
+        <MultiSelect className="w-52" label="Applications" placeholder="All applications" value={appIds} onChange={setAppIds} options={(apps ?? []).map((a) => ({ value: a.id, label: a.name, color: toneHex(a.tone) }))} />
+        <MultiSelect className="w-48" label="Assignees" placeholder="Anyone" value={assigneesSel} onChange={setAssigneesSel} options={[{ value: "__none", label: "Unassigned" }, ...assignees.map((a) => ({ value: a, label: a }))]} />
+        <MultiSelect className="w-44" label="Priority" placeholder="Any priority" value={priorities} onChange={setPriorities} searchable={false} options={PRIORITIES.map((p) => ({ value: p, label: PRIORITY_META[p].label, color: { low: "#a1a1aa", medium: "#38bdf8", high: "#fbbf24", critical: "#f43f5e" }[p] }))} />
         <Button variant={mine ? "primary" : "secondary"} onClick={() => setMine((v) => !v)}><User />Assigned to me</Button>
-        {filters > 0 && <Button variant="ghost" size="sm" onClick={() => { setQ(""); setAppId(""); setAssignee(""); setPriority(""); setMine(false); }}><X />Clear</Button>}
+        {filters > 0 && <Button variant="ghost" size="sm" onClick={() => { setQ(""); setAppIds([]); setAssigneesSel([]); setPriorities([]); setMine(false); }}><X />Clear</Button>}
         <Tabs id="tasks-view" value={view} onChange={setView} tabs={[{ value: "list", label: "By app", icon: <Rows3 /> }, { value: "board", label: "By due date", icon: <Columns3 /> }]} />
       </GlassCard>
 

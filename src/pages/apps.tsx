@@ -10,6 +10,7 @@ import { useMe } from "@/lib/auth";
 import { APP_STATUSES, type AppStatus, type AppSummary } from "@/core/types";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Chip, EmptyState, ProgressBar, ProgressRing, Skeleton, Sparkline, StatusBadge, Tabs, TiltCard } from "@/components/ui/bits";
 import { AppFormModal } from "@/components/app/app-form";
 import { ImportWizard } from "@/components/app/import-wizard";
@@ -155,11 +156,15 @@ export default function AppsPage() {
   const [view, setView] = React.useState<View>(() => (localStorage.getItem("itm.view") as View) || "grid");
   const [q, setQ] = React.useState("");
   const [sort, setSort] = React.useState<Sort>("updated");
-  const [category, setCategory] = React.useState("");
+  const [categoriesSel, setCategoriesSel] = React.useState<string[]>([]);
   const [onlyMine, setOnlyMine] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
-  const status = (params.get("status") as AppStatus | null) ?? "";
+  const statuses = (params.get("status") ?? "").split(",").filter(Boolean) as AppStatus[];
+  const toggleStatus = (v: AppStatus | "") => {
+    const next = !v ? [] : statuses.includes(v) ? statuses.filter((x) => x !== v) : [...statuses, v];
+    setParams(next.length ? { status: next.join(",") } : {});
+  };
   const qc = useQueryClient();
   const [capturingAll, setCapturingAll] = React.useState(false);
   async function captureAll() {
@@ -182,7 +187,7 @@ export default function AppsPage() {
   const list = React.useMemo(() => {
     const s = q.toLowerCase().trim();
     const filtered = (apps ?? []).filter((a) =>
-      (!status || view === "board" || a.status === status) && (!category || a.category === category) && (!onlyMine || a.ownerId === me.id || a.favorite) &&
+      (!statuses.length || view === "board" || statuses.includes(a.status)) && (!categoriesSel.length || categoriesSel.includes(a.category)) && (!onlyMine || a.ownerId === me.id || a.favorite) &&
       (!s || `${a.name} ${a.code} ${a.tagline} ${a.category} ${a.department} ${a.techStack.join(" ")} ${a.ownerName}`.toLowerCase().includes(s)));
     const sorters: Record<Sort, (a: AppSummary, b: AppSummary) => number> = {
       updated: (a, b) => (a.updatedAt < b.updatedAt ? 1 : -1),
@@ -192,7 +197,7 @@ export default function AppsPage() {
       golive: (a, b) => (a.goLiveDate || "9999").localeCompare(b.goLiveDate || "9999"),
     };
     return filtered.sort((a, b) => Number(b.favorite) - Number(a.favorite) || sorters[sort](a, b));
-  }, [apps, q, status, category, onlyMine, sort, view, me.id]);
+  }, [apps, q, statuses.join(","), categoriesSel, onlyMine, sort, view, me.id]); // eslint-disable-line
 
   const counts = Object.fromEntries(APP_STATUSES.map((s) => [s, (apps ?? []).filter((a) => a.status === s).length]));
 
@@ -227,7 +232,8 @@ export default function AppsPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, code, stack, owner…" className="pl-9" />
         </div>
-        <div className="w-44"><Select value={category} onChange={(e) => setCategory(e.target.value)}><option value="">All categories</option>{categories.map((c) => <option key={c}>{c}</option>)}</Select></div>
+        <MultiSelect className="w-52" label="Categories" placeholder="All categories" value={categoriesSel} onChange={setCategoriesSel} options={categories.map((c) => ({ value: c, label: c, hint: String((apps ?? []).filter((a) => a.category === c).length) }))} />
+        <MultiSelect className="w-48" label="Status" placeholder="All statuses" value={statuses} onChange={(v) => setParams(v.length ? { status: v.join(",") } : {})} searchable={false} options={APP_STATUSES.filter((s) => counts[s]).map((s) => ({ value: s, label: STATUS_META[s].label, color: STATUS_HEX[s], hint: String(counts[s]) }))} />
         <div className="flex w-52 items-center gap-2"><ArrowDownWideNarrow className="size-4 shrink-0 text-muted-foreground" />
           <Select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
             <option value="updated">Recently updated</option><option value="name">Name</option><option value="progress">Progress</option><option value="usage">Most used</option><option value="golive">Go-live date</option>
@@ -240,9 +246,9 @@ export default function AppsPage() {
       {view !== "board" && (
         <div className="flex flex-wrap gap-2">
           {[["", "All", apps?.length ?? 0] as const, ...APP_STATUSES.filter((s) => counts[s]).map((s) => [s, STATUS_META[s].label, counts[s]] as const)].map(([value, label, n]) => (
-            <button key={value || "all"} onClick={() => setParams(value ? { status: value } : {})}
-              className={cn("relative rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors", status === value ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
-              {status === value && <motion.span layoutId="status-chip" className="emboss absolute inset-0 -z-10 rounded-full border border-border" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
+            <button key={value || "all"} onClick={() => toggleStatus(value as AppStatus | "")} aria-pressed={value ? statuses.includes(value as AppStatus) : !statuses.length}
+              className={cn("relative rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors", (value ? statuses.includes(value as AppStatus) : !statuses.length) ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
+              {(value ? statuses.includes(value as AppStatus) : !statuses.length) && <motion.span layout className="emboss absolute inset-0 -z-10 rounded-full border border-border" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
               {value && <span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: STATUS_HEX[value as AppStatus] }} />}{label} <span className="opacity-60">{n}</span>
             </button>
           ))}

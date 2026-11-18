@@ -7,7 +7,8 @@ import { useApps, useLogs, useUsers } from "@/api/hooks";
 import { call } from "@/api/client";
 import type { LogEntry, Paged } from "@/core/types";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/field";
+import { Input } from "@/components/ui/field";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { EmptyState, GlassCard, Skeleton } from "@/components/ui/bits";
 import { ACTION_META, ActionIcon } from "@/components/app/activity";
 import { cn, fmtDateTime } from "@/lib/utils";
@@ -60,14 +61,14 @@ export default function LogsPage() {
   const [params] = useSearchParams();
   const { data: users } = useUsers();
   const { data: apps } = useApps();
-  const [f, setF] = React.useState({ q: "", userId: "", appId: params.get("appId") ?? "", action: "", entity: "", from: "", to: "" });
+  const [f, setF] = React.useState<{ q: string; userId: string[]; appId: string[]; action: string[]; entity: string[]; from: string; to: string }>({ q: "", userId: [], appId: params.get("appId") ? [params.get("appId")!] : [], action: [], entity: [], from: "", to: "" });
   const [page, setPage] = React.useState(0);
   const [q, setQ] = React.useState("");
   React.useEffect(() => { const t = setTimeout(() => setF((x) => ({ ...x, q })), 300); return () => clearTimeout(t); }, [q]);
   React.useEffect(() => setPage(0), [f]);
-  const filters = { ...Object.fromEntries(Object.entries(f).filter(([, v]) => v)), limit: PAGE, offset: page * PAGE };
+  const filters = { ...Object.fromEntries(Object.entries(f).filter(([, v]) => (Array.isArray(v) ? v.length : v))), limit: PAGE, offset: page * PAGE };
   const { data, isLoading, isFetching } = useLogs(filters);
-  const active = Object.entries(f).filter(([, v]) => v).length;
+  const active = Object.values(f).reduce<number>((n, v) => n + (Array.isArray(v) ? v.length : v ? 1 : 0), 0);
 
   async function exportLogs() {
     const all = await call<Paged<LogEntry>>("logs.list", { ...filters, limit: 1000, offset: 0 });
@@ -89,17 +90,17 @@ export default function LogsPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search summary, user, app…" className="pl-9" />
         </div>
-        <Select value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}><option value="">All users</option>{(users ?? []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
-        <Select value={f.appId} onChange={(e) => setF({ ...f, appId: e.target.value })}><option value="">All applications</option>{(apps ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
-        <Select value={f.action} onChange={(e) => setF({ ...f, action: e.target.value })}><option value="">All actions</option>{Object.entries(ACTION_META).map(([k, v]) => <option key={k} value={k}>{v.label} ({k})</option>)}</Select>
-        <Select value={f.entity} onChange={(e) => setF({ ...f, entity: e.target.value })}><option value="">All types</option>{ENTITIES.map((e) => <option key={e}>{e}</option>)}</Select>
+        <MultiSelect label="Users" placeholder="All users" value={f.userId} onChange={(v) => setF({ ...f, userId: v })} options={(users ?? []).map((u) => ({ value: u.id, label: u.name }))} />
+        <MultiSelect label="Applications" placeholder="All applications" value={f.appId} onChange={(v) => setF({ ...f, appId: v })} options={(apps ?? []).map((a) => ({ value: a.id, label: a.name }))} />
+        <MultiSelect label="Actions" placeholder="All actions" value={f.action} onChange={(v) => setF({ ...f, action: v })} options={Object.entries(ACTION_META).map(([k, v]) => ({ value: k, label: v.label, hint: k }))} />
+        <MultiSelect label="Types" placeholder="All types" value={f.entity} onChange={(v) => setF({ ...f, entity: v })} options={ENTITIES.map((e) => ({ value: e, label: e[0]!.toUpperCase() + e.slice(1) }))} />
         <div className="flex items-center gap-2 md:col-span-2">
           <span className="text-xs text-muted-foreground">From</span>
           <Input type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} title="From" />
           <span className="text-xs text-muted-foreground">to</span>
           <Input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} title="To" />
         </div>
-        {active > 0 && <Button size="sm" variant="ghost" className="w-fit" onClick={() => { setQ(""); setF({ q: "", userId: "", appId: "", action: "", entity: "", from: "", to: "" }); }}><X />Clear {active} filter{active > 1 ? "s" : ""}</Button>}
+        {active > 0 && <Button size="sm" variant="ghost" className="w-fit" onClick={() => { setQ(""); setF({ q: "", userId: [], appId: [], action: [], entity: [], from: "", to: "" }); }}><X />Clear {active} filter{active > 1 ? "s" : ""}</Button>}
       </GlassCard>
 
       <GlassCard className="overflow-hidden">

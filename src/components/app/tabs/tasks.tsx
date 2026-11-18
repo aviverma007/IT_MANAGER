@@ -35,7 +35,7 @@ function TaskRow({ task, canEdit, done, onToggle, onEdit, first, last }: {
           {task.notes && <MessageSquareText className="ml-2 inline size-3.5 text-muted-foreground" />}
           {done && task.doneBy && <span className="ml-2 text-[11px] text-muted-foreground">✓ {task.doneBy}</span>}
         </button>
-        {task.assignee && <span className="hidden rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground sm:inline">{task.assignee}</span>}
+        {task.assignee && <span className="hidden max-w-48 truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground sm:inline" title={task.assignee}>{task.assignee.split(", ").map((n) => n.split(" ")[0]).join(", ")}</span>}
         {task.dueDate && <span className={cn("rounded-lg px-2 py-0.5 text-[11px] font-medium", overdue ? "bg-rose-500/15 text-rose-400" : "text-muted-foreground")}>{fmtDate(task.dueDate, { day: "numeric", month: "short" })}</span>}
         <PriorityDot priority={task.priority} />
         {canEdit && (
