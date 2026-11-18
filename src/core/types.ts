@@ -106,8 +106,32 @@ export interface UsageEntry {
   transactions: number;
   avgMinutes: number;
   notes: string;
-  source: "manual" | "import";
+  source: "manual" | "import" | "auto";
   createdAt: string;
+}
+
+/** One visit to an application, reported by the tracking script embedded in that app. */
+export interface TrackSession {
+  id: string; // appId:sid
+  appId: string;
+  date: string; // YYYY-MM-DD (local)
+  sid: string;
+  visitor: string; // anonymous browser id
+  user: string; // signed-in user when the app exposes one
+  first: number; // epoch ms
+  last: number;
+  pages: Record<string, number>;
+  hits: number;
+}
+
+export interface LiveUsage {
+  activeNow: number;
+  today: { sessions: number; users: number; avgMinutes: number };
+  hours: number[]; // sessions started per hour today
+  topPages: { page: string; views: number }[];
+  topUsers: { user: string; sessions: number; minutes: number }[];
+  lastSeen: number | null;
+  tracking: boolean;
 }
 
 export interface Launch {
@@ -202,6 +226,7 @@ export interface DB {
   releases: Release[];
   attachments: Attachment[];
   screenshots: Screenshot[];
+  tracking: TrackSession[];
   favorites: { userId: string; appId: string }[];
   logs: LogEntry[];
 }

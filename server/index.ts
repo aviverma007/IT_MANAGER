@@ -44,6 +44,35 @@ function fail(res: express.Response, e: unknown) {
   return res.status(500).json({ error: "Something went wrong on the server." });
 }
 
+/* ----------------------------- usage tracking ----------------------------- */
+// track.js is embedded in each application; it posts tiny text/plain beacons (no CORS preflight) to /api/track.
+const TRACK_JS = fs.readFileSync(path.join(import.meta.dirname, "public", "track.js"), "utf8");
+app.get("/track.js", (_req, res) => {
+  res.setHeader("content-type", "application/javascript; charset=utf-8");
+  res.setHeader("cache-control", "public, max-age=3600");
+  res.setHeader("access-control-allow-origin", "*");
+  res.end(TRACK_JS);
+});
+let trackSave: NodeJS.Timeout | null = null;
+const trackEmitAt = new Map<string, number>();
+app.post("/api/track", express.text({ type: "*/*", limit: "8kb" }), (req, res) => {
+  res.setHeader("access-control-allow-origin", "*");
+  try {
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body ?? {};
+    const tracked = service.track(body);
+    if (tracked) {
+      if (!trackSave) trackSave = setTimeout(() => { trackSave = null; void service.persistNow(); }, 10_000);
+      const last = trackEmitAt.get(tracked.id) ?? 0;
+      if (Date.now() - last > 30_000) { // let open IT Manager screens refresh, at most twice a minute per app
+        trackEmitAt.set(tracked.id, Date.now());
+        service.emitChange({ method: "usage.track", userId: "tracker", userName: "Tracker", appId: tracked.id, summary: "", at: new Date().toISOString() });
+      }
+    }
+  } catch { /* ignore malformed beacons */ }
+  res.status(204).end();
+});
+setInterval(() => { if (service.pruneTracking(3)) void service.persistNow(); }, 6 * 3600e3).unref();
+
 /* ----------------------------- live refresh ----------------------------- */
 // Server-Sent Events: every open browser keeps one connection and is told about each saved change,
 // so lists, dashboards and task boards update on everyone's screen within a second.

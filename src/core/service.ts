@@ -1,7 +1,7 @@
 // Business logic for IT Manager. Pure TypeScript with no Node or DOM dependencies, so the same code runs
 // behind the Express API (server/index.ts) and inside the browser for the offline demo build.
 import type {
-  Access, App, AppDetail, AppStatus, AppSummary, Attachment, AttachmentMeta, Change, CoverShot, Screenshot, ScreenshotMeta, DashboardStats, DB, Doc, DocKind,
+  LiveUsage, Access, App, AppDetail, AppStatus, AppSummary, Attachment, AttachmentMeta, Change, CoverShot, Screenshot, ScreenshotMeta, DashboardStats, DB, Doc, DocKind,
   ImportResult, Launch, LogEntry, Paged, Priority, Role, Task, TaskGroup, Tone, UsageEntry, UsageSummary, User, UserRecord,
 } from "./types";
 import { APP_STATUSES, DOC_KINDS, PRIORITIES } from "./types";
@@ -268,6 +268,88 @@ export class Service {
     return shot;
   }
 
+  /* ------------------------------------------- usage tracking (track.js) ------------------------------------------- */
+
+  /** Record a beacon from the tracking script. Public (no login): only counts visits for a known app code. */
+  track(e: { app?: string; sid?: string; vid?: string; user?: string; page?: string; ev?: string }) {
+    const key = clean(e.app, 60).toLowerCase();
+    const app = this.db.apps.find((a) => a.code.toLowerCase() === key || a.id === key);
+    if (!app) return null;
+    const sid = clean(e.sid, 64);
+    if (!sid) return null;
+    const now = Date.now();
+    const date = ymd();
+    const id = `${app.id}:${sid}`;
+    let s = this.db.tracking.find((x) => x.id === id && x.date === date);
+    if (!s) {
+      s = { id, appId: app.id, date, sid, visitor: clean(e.vid, 64), user: clean(e.user, 120), first: now, last: now, pages: {}, hits: 0 };
+      this.db.tracking.push(s);
+    }
+    s.last = now;
+    s.hits++;
+    if (e.user) s.user = clean(e.user, 120);
+    const page = clean(e.page, 200) || "/";
+    if (e.ev === "start" || e.ev === "page") s.pages[page] = (s.pages[page] ?? 0) + 1;
+    this.rollUp(app.id, date);
+    return app;
+  }
+
+  /** Recompute the day's automatic usage entry from tracked sessions (keeps manual transactions & notes). */
+  private rollUp(appId: string, date: string) {
+    const list = this.db.tracking.filter((x) => x.appId === appId && x.date === date);
+    const users = new Set(list.map((x) => x.user || x.visitor || x.sid));
+    const minutes = list.map((x) => Math.max(0.5, (x.last - x.first) / 60000));
+    const avg = minutes.length ? Math.round((minutes.reduce((a, b) => a + b, 0) / minutes.length) * 10) / 10 : 0;
+    let entry = this.db.usage.find((u) => u.appId === appId && u.date === date);
+    if (!entry) {
+      entry = { id: uid(), appId, date, activeUsers: 0, sessions: 0, transactions: 0, avgMinutes: 0, notes: "", source: "auto", createdAt: nowIso() };
+      this.db.usage.push(entry);
+    }
+    entry.activeUsers = users.size;
+    entry.sessions = list.length;
+    entry.avgMinutes = avg;
+    if (entry.source !== "manual") entry.source = "auto";
+  }
+
+  /** Drop tracked sessions older than a few days (daily totals stay in usage entries). */
+  pruneTracking(days = 3) {
+    const cutoff = ymd(new Date(Date.now() - days * 864e5));
+    const before = this.db.tracking.length;
+    this.db.tracking = this.db.tracking.filter((x) => x.date >= cutoff);
+    return before - this.db.tracking.length;
+  }
+
+  liveUsage(appId: string): LiveUsage {
+    const today = ymd();
+    const all = this.db.tracking.filter((x) => x.appId === appId);
+    const list = all.filter((x) => x.date === today);
+    const now = Date.now();
+    const hours = Array.from({ length: 24 }, () => 0);
+    const pages = new Map<string, number>();
+    const users = new Map<string, { sessions: number; minutes: number }>();
+    for (const s of list) {
+      hours[new Date(s.first).getHours()]!++;
+      for (const [p, n] of Object.entries(s.pages)) pages.set(p, (pages.get(p) ?? 0) + n);
+      if (s.user) {
+        const u = users.get(s.user) ?? { sessions: 0, minutes: 0 };
+        u.sessions++;
+        u.minutes += Math.max(0.5, (s.last - s.first) / 60000);
+        users.set(s.user, u);
+      }
+    }
+    const uniq = new Set(list.map((x) => x.user || x.visitor || x.sid));
+    const mins = list.map((x) => Math.max(0.5, (x.last - x.first) / 60000));
+    return {
+      activeNow: list.filter((x) => now - x.last < 2.5 * 60_000).length,
+      today: { sessions: list.length, users: uniq.size, avgMinutes: mins.length ? Math.round((mins.reduce((a, b) => a + b, 0) / mins.length) * 10) / 10 : 0 },
+      hours,
+      topPages: [...pages.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([page, views]) => ({ page, views })),
+      topUsers: [...users.entries()].sort((a, b) => b[1].sessions - a[1].sessions).slice(0, 8).map(([user, v]) => ({ user, sessions: v.sessions, minutes: Math.round(v.minutes) })),
+      lastSeen: all.length ? Math.max(...all.map((x) => x.last)) : null,
+      tracking: all.length > 0,
+    };
+  }
+
   async persistNow() {
     await this.persist();
   }
@@ -432,7 +514,7 @@ export class Service {
       if (ctx.user.role === "viewer") throw new ApiError(403, "Viewers can't delete applications.");
       const id = app.id;
       this.db.apps = this.db.apps.filter((a) => a.id !== id);
-      for (const key of ["groups", "tasks", "usage", "launches", "docs", "releases", "attachments", "screenshots", "favorites"] as const) {
+      for (const key of ["groups", "tasks", "usage", "launches", "docs", "releases", "attachments", "screenshots", "tracking", "favorites"] as const) {
         (this.db[key] as { appId: string }[]) = (this.db[key] as { appId: string }[]).filter((x) => x.appId !== id);
       }
       this.log(ctx, "delete", "app", id, app, `Deleted application ${app.name}`);
@@ -826,6 +908,8 @@ export class Service {
       this.log(ctx, "delete", "screenshot", shot.id, app, `Deleted a screenshot${shot.caption ? ` “${shot.caption}”` : ""}`);
     }, { write: true });
 
+    this.on("usage.live", (ctx, p) => { this.app(ctx, p.appId, "view"); return this.liveUsage(p.appId); });
+
     /* ---------- logs ---------- */
     this.on("logs.list", (ctx, p: { appId?: string; userId?: string; action?: string; entity?: string; q?: string; from?: string; to?: string; limit?: number; offset?: number }): Paged<LogEntry> => {
       const visible = new Set(this.visibleApps(ctx.user).map((a) => a.id));
@@ -905,6 +989,16 @@ export class Service {
       this.db.sessions = sessions.filter((s) => this.db.users.some((u) => u.id === s.userId));
       this.log(ctx, "restore", "backup", null, null, `Restored a backup (${db.apps.length} applications, ${db.users.length} users)`);
       return { apps: this.db.apps.length, users: this.db.users.length };
+    }, { write: true });
+
+    this.on("admin.clearUsage", (ctx) => {
+      this.admin(ctx);
+      const before = this.db.usage.length;
+      this.db.usage = this.db.usage.filter((u) => u.source === "auto");
+      this.db.launches = [];
+      const removed = before - this.db.usage.length;
+      this.log(ctx, "reset", "usage", null, null, `Cleared ${removed} sample/manual usage entries (kept automatic tracking)`);
+      return { removed };
     }, { write: true });
 
     this.on("admin.reset", async (ctx, p: { mode: "sample" | "empty" }) => {

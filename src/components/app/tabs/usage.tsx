@@ -11,6 +11,7 @@ import { AnimatedNumber, EmptyState, GlassCard, SectionTitle, Tabs } from "@/com
 import { Modal, useConfirm } from "@/components/ui/modal";
 import { ImportWizard } from "@/components/app/import-wizard";
 import { cn, fmtDate, fmtNumber, toneHex } from "@/lib/utils";
+import { TrackingCard } from "./tracking";
 
 type Range = "30" | "90" | "365" | "all";
 
@@ -90,6 +91,8 @@ export function UsageTab({ app }: { app: AppDetail }) {
         ))}
       </div>
 
+      <TrackingCard app={app} />
+
       <GlassCard className="p-5">
         <SectionTitle title="Usage over time" sub={`${series.length} day(s) · ${fmtNumber(totals.sessions)} sessions · peak ${fmtNumber(totals.peak)} users`}
           action={<div className="flex flex-wrap gap-2">
@@ -136,7 +139,7 @@ export function UsageTab({ app }: { app: AppDetail }) {
                       <td className="px-3 py-2 tabular-nums">{u.sessions}</td>
                       <td className="px-3 py-2 tabular-nums">{u.transactions}</td>
                       <td className="px-3 py-2 tabular-nums">{u.avgMinutes}</td>
-                      <td className="max-w-56 truncate px-3 py-2 text-muted-foreground">{u.notes}</td>
+                      <td className="max-w-56 truncate px-3 py-2 text-muted-foreground">{u.source === "auto" && <span className="mr-1.5 rounded bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">AUTO</span>}{u.notes}</td>
                       <td className="px-3 py-2 text-right">
                         {canEdit && <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
                           <Button size="icon-sm" variant="ghost" onClick={() => setForm({ open: true, entry: u })} aria-label="Edit"><Edit3 /></Button>

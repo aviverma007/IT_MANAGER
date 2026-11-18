@@ -7,7 +7,7 @@ import { IT_MANAGER_SCREENS } from "./seed-screens";
 import type { Screenshot } from "./types";
 
 export function emptyDb(): DB {
-  return { version: 1, users: [], sessions: [], apps: [], groups: [], tasks: [], usage: [], launches: [], docs: [], releases: [], attachments: [], screenshots: [], favorites: [], logs: [] };
+  return { version: 1, users: [], sessions: [], apps: [], groups: [], tasks: [], usage: [], launches: [], docs: [], releases: [], attachments: [], screenshots: [], tracking: [], favorites: [], logs: [] };
 }
 
 async function makeUser(p: Pick<UserRecord, "username" | "name" | "email" | "role" | "title" | "department" | "bio" | "tone">, password: string): Promise<UserRecord> {
