@@ -692,6 +692,16 @@ export class Service {
       this.log(ctx, "delete", "task", task.id, app, `Deleted task "${task.title}"`);
     }, { write: true });
 
+    /** Every task the user can see, across all applications (the global Tasks page). */
+    this.on("tasks.all", (ctx) => {
+      const apps = new Map(this.visibleApps(ctx.user).map((a) => [a.id, a]));
+      const groups = new Map(this.db.groups.map((g) => [g.id, g]));
+      return this.db.tasks.filter((t) => apps.has(t.appId)).map((t) => {
+        const app = apps.get(t.appId)!;
+        return { ...t, appName: app.name, appCode: app.code, appTone: app.tone, appStatus: app.status, groupTitle: groups.get(t.groupId)?.title ?? "", canEdit: this.permission(ctx.user, app) === "edit" };
+      });
+    });
+
     this.on("tasks.import", (ctx, p: { appId: string; rows: Record<string, unknown>[] }) => {
       const app = this.app(ctx, p.appId, "edit");
       const result: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };

@@ -2,7 +2,7 @@ import * as React from "react";
 import { NavLink, useLocation, useNavigate, useOutlet } from "react-router-dom";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import {
-  Activity, AppWindow, BookOpen, ChevronsLeft, LayoutDashboard, LogOut, Menu, Moon, Plus, Search, Settings, ShieldCheck, Sun, Users, X,
+  ListChecks, Activity, AppWindow, BookOpen, ChevronsLeft, LayoutDashboard, LogOut, Menu, Moon, Plus, Search, Settings, ShieldCheck, Sun, Users, X,
 } from "lucide-react";
 import { useAuth, useMe } from "@/lib/auth";
 import { useApps } from "@/api/hooks";
@@ -42,6 +42,7 @@ export function Backdrop() {
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/apps", label: "Applications", icon: AppWindow },
+  { to: "/tasks", label: "All tasks", icon: ListChecks },
   { to: "/team", label: "Team", icon: Users },
   { to: "/logs", label: "Audit logs", icon: Activity },
   { to: "/guide", label: "User guide", icon: BookOpen },

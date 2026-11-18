@@ -195,7 +195,7 @@ export default function DashboardPage() {
         </GlassCard>
 
         <GlassCard className="p-5">
-          <SectionTitle title="Due in the next 2 weeks" sub="Open tasks with a due date" icon={<AlarmClock />} />
+          <SectionTitle title="Due in the next 2 weeks" sub="Open tasks with a due date" icon={<AlarmClock />} action={<Link to="/tasks?s=week" className="text-xs text-muted-foreground hover:text-foreground">All tasks →</Link>} />
           <div className="flex flex-col gap-1">
             {stats?.dueSoon.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Nothing due. 🎉</p>}
             {stats?.dueSoon.map((task, i) => {

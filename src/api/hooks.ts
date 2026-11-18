@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { call } from "./client";
-import type { AppDetail, AppSummary, DashboardStats, LogEntry, Paged, User } from "@/core/types";
+import type { TaskRow, AppDetail, AppSummary, DashboardStats, LogEntry, Paged, User } from "@/core/types";
 
 export const useApps = () => useQuery({ queryKey: ["apps"], queryFn: () => call<AppSummary[]>("apps.list") });
 export const useApp = (id: string | undefined) => useQuery({ queryKey: ["app", id], queryFn: () => call<AppDetail>("apps.get", { id }), enabled: !!id, retry: false });
@@ -32,3 +32,4 @@ export function useRun() {
     [qc],
   );
 }
+export const useAllTasks = () => useQuery({ queryKey: ["tasks-all"], queryFn: () => call<TaskRow[]>("tasks.all") });

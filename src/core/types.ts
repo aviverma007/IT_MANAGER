@@ -284,3 +284,12 @@ export interface Paged<T> {
 }
 
 export type ImportResult = { created: number; updated: number; skipped: number; errors: string[] };
+
+export interface TaskRow extends Task {
+  appName: string;
+  appCode: string;
+  appTone: Tone;
+  appStatus: AppStatus;
+  groupTitle: string;
+  canEdit: boolean;
+}
