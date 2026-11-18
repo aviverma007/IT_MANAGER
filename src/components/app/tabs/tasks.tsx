@@ -10,6 +10,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Burst, Checkbox, EmptyState, PriorityDot, ProgressBar, Tabs } from "@/components/ui/bits";
 import { Drawer, useConfirm } from "@/components/ui/modal";
 import { ImportWizard } from "@/components/app/import-wizard";
+import { AssigneeSelect } from "@/components/app/assignee";
 import { cn, fmtDate, toneHex } from "@/lib/utils";
 
 type Filter = "all" | "open" | "done";
@@ -152,7 +153,7 @@ function TaskDrawer({ app, task, onClose }: { app: AppDetail; task: Task | null;
         <Field label="Task"><Textarea value={form.title ?? ""} onChange={(e) => set("title", e.target.value)} className="min-h-16" /></Field>
         <Field label="Heading"><Select value={form.groupId} onChange={(e) => set("groupId", e.target.value)}>{app.groups.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}</Select></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Assignee"><Input value={form.assignee ?? ""} onChange={(e) => set("assignee", e.target.value)} placeholder="Name" /></Field>
+          <Field label="Assignee"><AssigneeSelect value={form.assignee ?? ""} onChange={(v) => set("assignee", v)} /></Field>
           <Field label="Due date"><Input type="date" value={form.dueDate ?? ""} onChange={(e) => set("dueDate", e.target.value)} /></Field>
         </div>
         <Field label="Priority">

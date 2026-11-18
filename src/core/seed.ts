@@ -52,7 +52,7 @@ const GROUPS: [string, [string, Priority][]][] = [
 ];
 
 const DONE_BY_STATUS: Record<AppStatus, number> = { planning: 2, development: 8, testing: 12, uat: 14, live: 18, maintenance: 18, "on-hold": 5, retired: 18 };
-const PEOPLE = ["Anirudh", "Priya", "Rahul", ""];
+const PEOPLE = ["Anirudh Verma", "Priya Sharma", "Rahul Mehta", ""];
 
 export async function sampleDb(): Promise<DB> {
   const db = emptyDb();
@@ -155,7 +155,7 @@ export async function sampleDb(): Promise<DB> {
       db.groups.push(group);
       tasks.forEach(([t, priority], ti) => {
         const done = n++ < 14;
-        db.tasks.push({ id: uid(), appId: app.id, groupId: group.id, title: t, notes: "", done, doneAt: done ? created : null, doneBy: done ? admin.name : null, assignee: done ? "" : "Anirudh", dueDate: done ? "" : addDays(today, 3 + ti * 3), priority, order: ti, createdAt: created });
+        db.tasks.push({ id: uid(), appId: app.id, groupId: group.id, title: t, notes: "", done, doneAt: done ? created : null, doneBy: done ? admin.name : null, assignee: done ? "" : admin.name, dueDate: done ? "" : addDays(today, 3 + ti * 3), priority, order: ti, createdAt: created });
       });
     });
     const img = (i: number) => (shots[i] ? `![${shots[i]!.caption}](shot:${shots[i]!.id})` : "");

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { AnimatedNumber, Checkbox, EmptyState, GlassCard, PriorityDot, Skeleton, Tabs } from "@/components/ui/bits";
 import { Modal } from "@/components/ui/modal";
+import { AssigneeSelect, useAssigneeNames } from "@/components/app/assignee";
 import { cn, fmtDate, PRIORITY_META, toneHex } from "@/lib/utils";
 
 type Status = "open" | "overdue" | "week" | "done" | "all";
@@ -85,7 +86,7 @@ function NewTaskModal({ open, onClose }: { open: boolean; onClose: () => void })
         <Field label="Application"><Select value={appId} onChange={(e) => setAppId(e.target.value)}>{editable.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></Field>
         <Field label="Heading"><Select value={f.groupId} onChange={(e) => setF({ ...f, groupId: e.target.value })}>{(app?.groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}{!app?.groups.length && <option value="">General (new)</option>}</Select></Field>
         <Field label="Task" className="sm:col-span-2"><Input autoFocus value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="What needs to be done?" /></Field>
-        <Field label="Assignee"><Input value={f.assignee} onChange={(e) => setF({ ...f, assignee: e.target.value })} placeholder="Name" /></Field>
+        <Field label="Assignee"><AssigneeSelect value={f.assignee} onChange={(v) => setF({ ...f, assignee: v })} /></Field>
         <Field label="Due date"><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></Field>
         <Field label="Priority" className="sm:col-span-2">
           <div className="grid grid-cols-4 gap-2">{PRIORITIES.map((p) => <button key={p} onClick={() => setF({ ...f, priority: p })} className={cn("rounded-xl border px-2 py-2 text-xs", f.priority === p ? "emboss border-ring" : "border-border text-muted-foreground hover:border-ring")}><PriorityDot priority={p} withLabel /></button>)}</div>
@@ -116,12 +117,12 @@ export default function TasksPage() {
   const isDone = (t: TaskRow) => pending[t.id] ?? t.done;
   const myNames = [me.name.toLowerCase(), me.name.split(" ")[0]!.toLowerCase(), me.username.toLowerCase()];
   const all = tasks ?? [];
-  const assignees = [...new Set(all.map((t) => t.assignee).filter(Boolean))].sort();
+  const assignees = useAssigneeNames();
 
   const base = all.filter((t) => {
     const s = q.toLowerCase().trim();
-    return (!appId || t.appId === appId) && (!assignee || t.assignee === assignee) && (!priority || t.priority === priority) &&
-      (!mine || myNames.includes(t.assignee.toLowerCase())) &&
+    return (!appId || t.appId === appId) && (!assignee || (assignee === "__none" ? !t.assignee : t.assignee === assignee)) && (!priority || t.priority === priority) &&
+      (!mine || t.assignee === me.name || myNames.includes(t.assignee.toLowerCase())) &&
       (!s || `${t.title} ${t.notes} ${t.appName} ${t.groupTitle} ${t.assignee}`.toLowerCase().includes(s));
   });
   const counts = {
@@ -184,7 +185,7 @@ export default function TasksPage() {
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks, notes, apps, people…" className="pl-9" />
         </div>
         <div className="w-48"><Select value={appId} onChange={(e) => setAppId(e.target.value)}><option value="">All applications</option>{(apps ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></div>
-        <div className="w-40"><Select value={assignee} onChange={(e) => setAssignee(e.target.value)}><option value="">Anyone</option>{assignees.map((a) => <option key={a}>{a}</option>)}</Select></div>
+        <div className="w-40"><Select value={assignee} onChange={(e) => setAssignee(e.target.value)}><option value="">Anyone</option><option value="__none">Unassigned</option>{assignees.map((a) => <option key={a}>{a}</option>)}</Select></div>
         <div className="w-36"><Select value={priority} onChange={(e) => setPriority(e.target.value)}><option value="">Any priority</option>{PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}</Select></div>
         <Button variant={mine ? "primary" : "secondary"} onClick={() => setMine((v) => !v)}><User />Assigned to me</Button>
         {filters > 0 && <Button variant="ghost" size="sm" onClick={() => { setQ(""); setAppId(""); setAssignee(""); setPriority(""); setMine(false); }}><X />Clear</Button>}

@@ -102,6 +102,7 @@ export class Service {
   private migrate(db: DB): DB {
     const base = emptyDb();
     const out = { ...base, ...db, version: 2 };
+    for (const t of out.tasks) if (t.assignee) t.assignee = this.assigneeName(t.assignee, out.users);
     for (const a of out.apps) {
       if (a.coverShotId === undefined) a.coverShotId = null;
       delete (a as { repoUrl?: string }).repoUrl; // repository links are no longer kept
@@ -231,6 +232,16 @@ export class Service {
       coverShot: this.coverShot(app),
       shotCount: this.db.screenshots.filter((x) => x.appId === app.id).length,
     };
+  }
+
+  /** Map a typed/imported assignee to a real user's full name; unknown names → "" (tasks only point at real users). */
+  assigneeName(raw: unknown, users = this.db.users) {
+    const v = clean(raw, 120).toLowerCase();
+    if (!v) return "";
+    const exact = users.find((u) => u.name.toLowerCase() === v || u.username.toLowerCase() === v || (u.email && u.email.toLowerCase() === v));
+    if (exact) return exact.name;
+    const byFirst = users.filter((u) => u.name.split(/\s+/)[0]!.toLowerCase() === v);
+    return byFirst.length === 1 ? byFirst[0]!.name : "";
   }
 
   private coverShot(app: App): CoverShot {
@@ -427,6 +438,7 @@ export class Service {
           if (!p.active) this.db.sessions = this.db.sessions.filter((s) => s.userId !== user.id);
         }
       }
+      if (before.name !== user.name) for (const t of this.db.tasks) if (t.assignee === before.name) t.assignee = user.name;
       const changes = diff(before, user, [...USER_EDITABLE, "role", "active"]);
       if (changes.length) this.log(ctx, "update", "user", user.id, null, `Updated user ${user.name}`, changes);
       return publicUser(user);
@@ -460,6 +472,7 @@ export class Service {
       this.db.users = this.db.users.filter((u) => u.id !== p.id);
       this.db.sessions = this.db.sessions.filter((s) => s.userId !== p.id);
       this.db.favorites = this.db.favorites.filter((f) => f.userId !== p.id);
+      for (const t of this.db.tasks) if (t.assignee === user.name) t.assignee = "";
       for (const a of this.db.apps) {
         if (a.ownerId === p.id) a.ownerId = null;
         delete a.acl[p.id];
@@ -648,7 +661,7 @@ export class Service {
       const before = { ...task };
       if ("title" in p) task.title = clean(p.title, 300) || task.title;
       if ("notes" in p) task.notes = clean(p.notes, 4000);
-      if ("assignee" in p) task.assignee = clean(p.assignee, 80);
+      if ("assignee" in p) task.assignee = this.assigneeName(p.assignee);
       if ("dueDate" in p) task.dueDate = normalizeDate(p.dueDate);
       if ("priority" in p && PRIORITIES.includes(p.priority)) task.priority = p.priority;
       if ("groupId" in p && p.groupId !== task.groupId) {
@@ -718,7 +731,7 @@ export class Service {
         if (existing) {
           const done = "done" in row ? toBool(row.done) : existing.done;
           if (done !== existing.done) { existing.done = done; existing.doneAt = done ? nowIso() : null; existing.doneBy = done ? ctx.user.name : null; }
-          if (row.assignee) existing.assignee = clean(row.assignee, 80);
+          if (row.assignee) existing.assignee = this.assigneeName(row.assignee);
           if (row.dueDate) existing.dueDate = normalizeDate(row.dueDate);
           if (row.notes) existing.notes = clean(row.notes, 4000);
           result.updated++;
@@ -1107,7 +1120,7 @@ export class Service {
     const done = Boolean(p.done);
     return {
       id: uid(), appId: group.appId, groupId: group.id, title: clean(p.title, 300), notes: clean(p.notes, 4000), done, doneAt: done ? nowIso() : null, doneBy: done ? doneBy : null,
-      assignee: clean(p.assignee, 80), dueDate: normalizeDate(p.dueDate), priority: PRIORITIES.includes(p.priority) ? p.priority : "medium",
+      assignee: this.assigneeName(p.assignee), dueDate: normalizeDate(p.dueDate), priority: PRIORITIES.includes(p.priority) ? p.priority : "medium",
       order: this.db.tasks.filter((t) => t.groupId === group.id).length, createdAt: nowIso(),
     };
   }
