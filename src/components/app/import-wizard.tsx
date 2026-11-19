@@ -10,7 +10,7 @@ import type { ImportResult } from "@/core/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-export type ImportKind = "apps" | "tasks" | "usage";
+export type ImportKind = "apps" | "tasks" | "usage" | "tickets";
 
 type FieldDef = { key: string; label: string; required?: boolean; synonyms: string[] };
 
@@ -35,6 +35,7 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: "hosting", label: "Hosting", synonyms: ["hosting", "deployment", "on-prem / cloud", "on prem", "cloud", "environment"] },
     { key: "vendor", label: "Vendor", synonyms: ["vendor", "provider", "publisher", "supplier"] },
     { key: "source", label: "In-house / vendor", synonyms: ["source", "built by", "in-house", "inhouse", "ownership"] },
+    { key: "ticketKeywords", label: "Ticket keywords", synonyms: ["ticket keywords", "keywords", "aliases"] },
   ],
   tasks: [
     { key: "group", label: "Heading / section", synonyms: ["heading", "group", "section", "phase", "stage", "module", "milestone", "category"] },
@@ -54,6 +55,23 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: "avgMinutes", label: "Avg minutes", synonyms: ["avg minutes", "average minutes", "avg time", "duration", "time spent"] },
     { key: "notes", label: "Notes", synonyms: ["notes", "remarks", "comment"] },
   ],
+  tickets: [
+    { key: "displayId", label: "Request ID", synonyms: ["request id", "id", "ticket id", "ticket", "request no", "request number", "ticket number", "#"] },
+    { key: "subject", label: "Subject", required: true, synonyms: ["subject", "title", "summary", "description", "issue"] },
+    { key: "status", label: "Status", synonyms: ["status", "request status", "state"] },
+    { key: "priority", label: "Priority", synonyms: ["priority", "urgency", "impact"] },
+    { key: "category", label: "Category", synonyms: ["category"] },
+    { key: "subcategory", label: "Subcategory", synonyms: ["subcategory", "sub category"] },
+    { key: "item", label: "Item", synonyms: ["item"] },
+    { key: "group", label: "Support group", synonyms: ["group", "support group", "team"] },
+    { key: "technician", label: "Technician", synonyms: ["technician", "assigned to", "assignee", "owner"] },
+    { key: "requester", label: "Requester", synonyms: ["requester", "requester name", "raised by", "created by", "user"] },
+    { key: "requesterDept", label: "Department", synonyms: ["department", "requester department", "dept"] },
+    { key: "site", label: "Site", synonyms: ["site", "location"] },
+    { key: "createdAt", label: "Created", synonyms: ["created time", "created date", "created", "created on", "raised on", "date"] },
+    { key: "closedAt", label: "Resolved / closed", synonyms: ["resolved time", "completed time", "closed time", "resolved date", "closed date", "completed date"] },
+    { key: "dueAt", label: "Due by", synonyms: ["due by time", "due by", "due date"] },
+  ],
 };
 
 const TEMPLATES: Record<ImportKind, Record<string, unknown>[]> = {
@@ -69,6 +87,9 @@ const TEMPLATES: Record<ImportKind, Record<string, unknown>[]> = {
   usage: [
     { Application: "SMARTDESK", Date: "2026-11-15", "Active users": 96, Sessions: 210, Transactions: 540, "Avg minutes": 8.5, Notes: "" },
     { Application: "SMARTDESK", Date: "2026-11-16", "Active users": 102, Sessions: 225, Transactions: 580, "Avg minutes": 9.1, Notes: "" },
+  ],
+  tickets: [
+    { "Request ID": 4101, Subject: "SmartDesk login page not loading", Status: "Open", Priority: "High", Category: "Software", Subcategory: "SmartDesk", Item: "", Group: "IT Support", Technician: "Ravi Shankar", Requester: "Anuj Goel", Department: "Finance & Accounts", Site: "IFC", "Created Time": "2026-11-18", "Resolved Time": "" },
   ],
 };
 
@@ -167,13 +188,13 @@ export function ImportWizard({ open, onClose, kind, appId, appName }: { open: bo
 
   async function submit() {
     setBusy(true);
-    const method = kind === "apps" ? "apps.import" : kind === "tasks" ? "tasks.import" : "usage.import";
+    const method = kind === "apps" ? "apps.import" : kind === "tasks" ? "tasks.import" : kind === "tickets" ? "tickets.import" : "usage.import";
     const res = await run<ImportResult>(method, { appId, rows: mapped });
     setBusy(false);
     if (res) { setResult(res); setStep(2); }
   }
 
-  const title = { apps: "Import applications", tasks: `Import tasks${appName ? ` into ${appName}` : ""}`, usage: `Import usage${appName ? ` for ${appName}` : ""}` }[kind];
+  const title = { apps: "Import applications", tasks: `Import tasks${appName ? ` into ${appName}` : ""}`, usage: `Import usage${appName ? ` for ${appName}` : ""}`, tickets: "Import helpdesk tickets (ServiceDesk Plus export)" }[kind];
 
   return (
     <Modal open={open} onClose={onClose} title={title} description="Excel (.xlsx/.xls), CSV, TSV, ODS, JSON or a table pasted from anywhere." icon={<FileSpreadsheet />} size="xl"

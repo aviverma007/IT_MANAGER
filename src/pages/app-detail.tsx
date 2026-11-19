@@ -2,8 +2,7 @@ import * as React from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import {
-  Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff,
-} from "lucide-react";
+  Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff, Ticket } from "lucide-react";
 import { useApp, useRun } from "@/api/hooks";
 import { pingUrl } from "@/api/client";
 import { useMe } from "@/lib/auth";
@@ -22,10 +21,11 @@ import { ReleasesTab } from "@/components/app/tabs/releases";
 import { FilesTab } from "@/components/app/tabs/files";
 import { AccessTab } from "@/components/app/tabs/access";
 import { ActivityTab } from "@/components/app/tabs/activity";
+import { TicketsTab } from "@/components/app/tickets";
 import { BrowserFrame, ScreensTab } from "@/components/app/tabs/screens";
 import { shotSrc } from "@/api/client";
 
-const TABS = ["overview", "screens", "tasks", "usage", "docs", "releases", "files", "access", "activity"] as const;
+const TABS = ["overview", "screens", "tasks", "usage", "tickets", "docs", "releases", "files", "access", "activity"] as const;
 type Tab = (typeof TABS)[number];
 
 function Health({ appId, url }: { appId: string; url: string }) {
@@ -122,6 +122,7 @@ export default function AppDetailPage() {
           { value: "screens", label: "Screens", icon: <Camera />, count: app.screenshots.length },
           { value: "tasks", label: "Tasks", icon: <CheckSquare />, count: app.tasksTotal - app.tasksDone },
           { value: "usage", label: "Usage", icon: <Activity /> },
+          { value: "tickets", label: "Tickets", icon: <Ticket />, count: app.tickets?.open },
           { value: "docs", label: "Docs & manual", icon: <BookOpen />, count: app.docs.length },
           { value: "releases", label: "Releases", icon: <Rocket />, count: app.releases.length },
           { value: "files", label: "Files", icon: <FileBox />, count: app.attachments.length },
@@ -136,6 +137,7 @@ export default function AppDetailPage() {
           {tab === "screens" && <ScreensTab app={app} />}
           {tab === "tasks" && <TasksTab app={app} />}
           {tab === "usage" && <UsageTab app={app} />}
+          {tab === "tickets" && <TicketsTab app={app} />}
           {tab === "docs" && <DocsTab app={app} />}
           {tab === "releases" && <ReleasesTab app={app} />}
           {tab === "files" && <FilesTab app={app} />}

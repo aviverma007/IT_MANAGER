@@ -17,13 +17,13 @@ type Form = {
   name: string; code: string; tagline: string; description: string; category: string; department: string; status: string; priority: string;
   url: string; environments: EnvLink[]; techStack: string; ownerId: string; version: string; startDate: string; goLiveDate: string;
   tone: Tone; cover: string; visibility: "public" | "restricted"; withTemplate: boolean;
-  hosting: string; source: "in-house" | "vendor"; vendor: string; seats: string; activeUsersManual: string;
+  hosting: string; source: "in-house" | "vendor"; vendor: string; seats: string; activeUsersManual: string; ticketKeywords: string;
 };
 
 const blank = (): Form => ({
   name: "", code: "", tagline: "", description: "", category: "", department: "", status: "planning", priority: "medium", url: "",
   environments: [], techStack: "", ownerId: "", version: "", startDate: new Date().toISOString().slice(0, 10), goLiveDate: "", tone: 1, cover: "",
-  visibility: "public", withTemplate: true, hosting: "", source: "in-house", vendor: "", seats: "", activeUsersManual: "",
+  visibility: "public", withTemplate: true, hosting: "", source: "in-house", vendor: "", seats: "", activeUsersManual: "", ticketKeywords: "",
 });
 
 function fromApp(a: AppSummary): Form {
@@ -31,7 +31,7 @@ function fromApp(a: AppSummary): Form {
     name: a.name, code: a.code, tagline: a.tagline, description: a.description, category: a.category, department: a.department, status: a.status,
     priority: a.priority, url: a.url, environments: a.environments, techStack: a.techStack.join(", "), ownerId: a.ownerId ?? "",
     version: a.version, startDate: a.startDate, goLiveDate: a.goLiveDate, tone: a.tone, cover: a.cover, visibility: a.visibility, withTemplate: false,
-    hosting: a.hosting, source: a.source, vendor: a.vendor, seats: a.seats ? String(a.seats) : "", activeUsersManual: a.activeUsersManual ? String(a.activeUsersManual) : "",
+    hosting: a.hosting, source: a.source, vendor: a.vendor, seats: a.seats ? String(a.seats) : "", activeUsersManual: a.activeUsersManual ? String(a.activeUsersManual) : "", ticketKeywords: (a.ticketKeywords ?? []).join(", "),
   };
 }
 
@@ -157,6 +157,7 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
                 ))}
               </div>
             </div>
+            <Field label="Ticket keywords" hint="Comma separated — words in helpdesk ticket subjects/categories that mean this app (the app name and code are used automatically)"><Input value={form.ticketKeywords} onChange={(e) => set("ticketKeywords", e.target.value)} placeholder="e.g. HRMS, leave, attendance" /></Field>
             <Field label="Tech stack" hint="Comma separated"><Input value={form.techStack} onChange={(e) => set("techStack", e.target.value)} placeholder="React, Node.js, SQL Server" /></Field>
           </div>
         )}

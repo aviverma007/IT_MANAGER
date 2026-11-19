@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { cn, fmtDate, fmtNumber, STATUS_HEX, STATUS_META, toneHex } from "@/lib/utils";
 import { openApp } from "@/lib/launch";
 import { Landscape, utilColor } from "@/components/app/landscape";
+import { TicketBadge } from "@/components/app/tickets";
 
 type View = "grid" | "list" | "board";
 type Sort = "updated" | "name" | "progress" | "usage" | "users" | "utilization" | "golive";
@@ -76,7 +77,7 @@ function AppCard({ app, index }: { app: AppSummary; index: number }) {
           <div className="flex flex-wrap gap-1.5">{app.techStack.slice(0, 3).map((t) => <Chip key={t}>{t}</Chip>)}{app.techStack.length > 3 && <Chip>+{app.techStack.length - 3}</Chip>}</div>
           <div className="mt-auto flex items-end justify-between gap-3 border-t border-border pt-3">
             <div className="text-xs text-muted-foreground">
-              <div className="mb-1"><UsersUsage app={app} /></div>
+              <div className="mb-1 flex flex-wrap items-center gap-1.5"><UsersUsage app={app} /><TicketBadge app={app} /></div>
               <div className="font-medium text-foreground">{fmtNumber(app.usage.sessions30)} <span className="font-normal text-muted-foreground">sessions · 30d</span></div>
               <div>{app.tasksDone}/{app.tasksTotal} tasks{app.overdue > 0 && <span className="text-rose-400"> · {app.overdue} overdue</span>}</div>
             </div>
@@ -105,6 +106,7 @@ function AppRow({ app, index }: { app: AppSummary; index: number }) {
       <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
       <td className="w-48 px-4 py-3"><div className="flex items-center gap-2"><ProgressBar value={app.progress} color={toneHex(app.tone)} /><span className="w-9 text-right text-xs tabular-nums">{app.progress}%</span></div></td>
       <td className="px-4 py-3"><UsersUsage app={app} /></td>
+      <td className="px-4 py-3">{app.tickets?.total ? <TicketBadge app={app} /> : <span className="text-xs text-muted-foreground">—</span>}</td>
       <td className="px-4 py-3 text-sm tabular-nums">{fmtNumber(app.usage.sessions30)}</td>
       <td className="px-4 py-3 text-sm">{app.ownerName || "—"}</td>
       <td className="px-4 py-3 text-sm text-muted-foreground">{fmtDate(app.goLiveDate)}</td>
@@ -152,7 +154,7 @@ function Board({ apps }: { apps: AppSummary[] }) {
                         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{a.name}</div><div className="truncate text-[11px] text-muted-foreground">{a.ownerName || a.department}</div></div>
                       </div>
                       <div className="mt-2.5 flex items-center gap-2"><ProgressBar value={a.progress} color={toneHex(a.tone)} className="h-1.5" /><span className="text-[11px] tabular-nums text-muted-foreground">{a.progress}%</span></div>
-                      <div className="mt-2"><UsersUsage app={a} compact /></div>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5"><UsersUsage app={a} compact /><TicketBadge app={a} compact /></div>
                     </Link>
                   </motion.div>
                 ))}
@@ -224,7 +226,7 @@ export default function AppsPage() {
     const rows = list.map((a) => ({
       Name: a.name, Code: a.code, Status: STATUS_META[a.status].label, Progress: `${a.progress}%`, "Tasks done": a.tasksDone, "Tasks total": a.tasksTotal, Category: a.category, Department: a.department,
       Owner: a.ownerName, Version: a.version, Link: a.url, "Tech stack": a.techStack.join(", "), "Sessions (30d)": a.usage.sessions30, "Active users": a.usage.activeUsers,
-      "Launches (30d)": a.usage.launches30, Hosting: a.hosting, Source: a.source, Vendor: a.vendor, "Licensed seats": a.seats, "Active users (landscape)": a.landscape.activeUsers, "Utilization": a.landscape.utilization === null ? "" : `${a.landscape.utilization}%`, "Start date": a.startDate, "Go-live date": a.goLiveDate, Priority: a.priority, Visibility: a.visibility,
+      "Launches (30d)": a.usage.launches30, Hosting: a.hosting, Source: a.source, Vendor: a.vendor, "Licensed seats": a.seats, "Active users (landscape)": a.landscape.activeUsers, "Utilization": a.landscape.utilization === null ? "" : `${a.landscape.utilization}%`, "Open tickets": a.tickets?.open ?? 0, "Ticket keywords": a.ticketKeywords.join(", "), "Start date": a.startDate, "Go-live date": a.goLiveDate, Priority: a.priority, Visibility: a.visibility,
     }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Applications");
@@ -292,7 +294,7 @@ export default function AppsPage() {
             {view === "list" && (
               <motion.div key="list" className="glass overflow-x-auto rounded-3xl" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <table className="w-full min-w-[860px]">
-                  <thead><tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">{["Application", "Status", "Progress", "Users / usage", "Sessions 30d", "Owner", "Go-live", ""].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
+                  <thead><tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">{["Application", "Status", "Progress", "Users / usage", "Tickets", "Sessions 30d", "Owner", "Go-live", ""].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
                   <tbody><AnimatePresence>{list.map((a, i) => <AppRow key={a.id} app={a} index={i} />)}</AnimatePresence></tbody>
                 </table>
               </motion.div>

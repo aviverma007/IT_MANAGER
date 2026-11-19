@@ -7,6 +7,10 @@ import express from "express";
 import cors from "cors";
 import { ApiError, Service, type Store } from "../src/core/service.ts";
 import type { DB } from "../src/core/types.ts";
+import { fetchTickets, sdpConfigured } from "./sdp.ts";
+
+// Optional .env next to package.json (ServiceDesk Plus keys etc.) — never committed.
+try { process.loadEnvFile(path.resolve(import.meta.dirname, "../.env")); } catch { /* no .env */ }
 
 const PORT = Number(process.env.PORT ?? 4000);
 const DATA_DIR = path.resolve(process.env.DATA_DIR ?? path.join(import.meta.dirname, "data"));
@@ -246,6 +250,53 @@ app.post("/api/apps.ping", async (req, res) => {
     fail(res, e);
   }
 });
+
+
+/* ---------- ServiceDesk Plus ticket sync ---------- */
+let syncing: Promise<{ added: number; updated: number; fetched: number; total: number }> | null = null;
+function syncTickets(full: boolean) {
+  if (!sdpConfigured()) return Promise.reject(new ApiError(400, "ServiceDesk Plus isn't connected yet — add the SDP_* keys to the .env file on the server and restart."));
+  if (syncing) return syncing;
+  syncing = (async () => {
+    try {
+      const known = new Map(service.db.tickets.map((t) => [t.id, t]));
+      const { tickets, total } = await fetchTickets({ pages: full ? undefined : 3, known });
+      const r = service.ingestTickets(tickets, { total });
+      await service.persistNow();
+      service.emitChange({ method: "tickets.sync", userId: "system", userName: "ServiceDesk Plus", appId: null, summary: `Synced ${tickets.length} ticket(s)`, at: new Date().toISOString() });
+      console.log(`[tickets] synced ${tickets.length} (${r.added} new)`);
+      return { ...r, fetched: tickets.length, total };
+    } catch (e) {
+      service.ticketSyncFailed((e as Error).message);
+      await service.persistNow();
+      console.log("[tickets] sync failed:", (e as Error).message);
+      throw e instanceof ApiError ? e : new ApiError(502, (e as Error).message);
+    } finally {
+      syncing = null;
+    }
+  })();
+  return syncing;
+}
+
+app.post("/api/tickets.sync", async (req, res) => {
+  try {
+    const user = service.authenticate(tokenOf(req));
+    if (!user) throw new ApiError(401, "Please sign in again.");
+    if (user.role !== "admin") throw new ApiError(403, "Only administrators can sync tickets.");
+    res.json(await syncTickets(req.body?.full !== false));
+  } catch (e) {
+    fail(res, e);
+  }
+});
+
+if (sdpConfigured()) {
+  const minutes = Math.max(2, Number(process.env.SDP_SYNC_MINUTES ?? 10));
+  let runs = 0;
+  const tick = () => { const full = runs++ % Math.max(1, Math.round(360 / minutes)) === 0; void syncTickets(full).catch(() => undefined); };
+  setTimeout(tick, 6000);
+  setInterval(tick, minutes * 60e3).unref();
+  console.log(`[tickets] ServiceDesk Plus sync every ${minutes} min (full sync every ~6 h)`);
+}
 
 app.post("/api/:method", async (req, res) => {
   try {

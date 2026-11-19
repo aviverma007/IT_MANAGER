@@ -4,7 +4,8 @@ import type {
   LiveUsage, Access, App, AppDetail, AppStatus, AppSummary, Attachment, AttachmentMeta, Change, CoverShot, Screenshot, ScreenshotMeta, DashboardStats, DB, Doc, DocKind,
   ImportResult, Launch, LogEntry, Paged, Priority, Role, Task, TaskGroup, Tone, UsageEntry, UsageSummary, User, UserRecord,
 } from "./types";
-import { APP_STATUSES, DOC_KINDS, HOSTINGS, PRIORITIES } from "./types";
+import { APP_STATUSES, DOC_KINDS, HOSTINGS, PRIORITIES, TICKET_RULE_FIELDS } from "./types";
+import type { Ticket, TicketCounts, TicketRow, TicketRuleField } from "./types";
 import { hashPassword, newSalt, newToken, verifyPassword } from "./crypto";
 import { addDays, normalizeDate, nowIso, splitList, toBool, toNumber, uid, ymd } from "./util";
 import { emptyDb, freshDb, sampleDb } from "./seed";
@@ -40,7 +41,7 @@ const MAX_ATTACHMENT = 8 * 1024 * 1024;
 const USER_EDITABLE = ["name", "email", "title", "department", "bio", "avatar", "tone"] as const;
 const APP_FIELDS = [
   "name", "code", "tagline", "description", "category", "department", "status", "priority", "url", "environments",
-  "techStack", "ownerId", "version", "cover", "tone", "startDate", "goLiveDate", "seats", "activeUsersManual", "hosting", "source", "vendor",
+  "techStack", "ownerId", "version", "cover", "tone", "startDate", "goLiveDate", "seats", "activeUsersManual", "hosting", "source", "vendor", "ticketKeywords",
 ] as const;
 
 function publicUser(u: UserRecord): User {
@@ -71,6 +72,9 @@ function diff(before: object, after: object, keys: readonly string[]): Change[] 
   }
   return changes;
 }
+
+const CLOSED_STATUS = /resolv|clos|cancel|complet|reject|done/i;
+export { CLOSED_STATUS };
 
 export class Service {
   db: DB = emptyDb();
@@ -111,6 +115,7 @@ export class Service {
       if (a.hosting === undefined) a.hosting = "on-prem"; // existing apps were all built in-house and hosted on the LAN
       if (a.source === undefined) a.source = "in-house";
       if (a.vendor === undefined) a.vendor = "";
+      if (!Array.isArray(a.ticketKeywords)) a.ticketKeywords = [];
       delete (a as { repoUrl?: string }).repoUrl; // repository links are no longer kept
     }
     return out;
@@ -132,6 +137,7 @@ export class Service {
     if (!user) throw new ApiError(401, "Your session has expired. Please sign in again.");
     const result = await def.handler({ user }, params ?? {});
     if (def.write) {
+      this.ticketIndex = null;
       await this.persist();
       const last = this.db.logs[0];
       this.emitChange({ method, userId: user.id, userName: user.name, appId: last?.appId ?? null, summary: last && last.userId === user.id ? last.summary : "", at: nowIso() });
@@ -237,6 +243,7 @@ export class Service {
       docCount: this.db.docs.filter((d) => d.appId === app.id).length,
       coverShot: this.coverShot(app),
       landscape: this.landscapeOf(app),
+      tickets: this.ticketCounts(app.id),
       shotCount: this.db.screenshots.filter((x) => x.appId === app.id).length,
     };
   }
@@ -388,6 +395,110 @@ export class Service {
 
   async persistNow() {
     await this.persist();
+  }
+
+
+  /* ---------------------------------------------------- tickets ----------------------------------------------------- */
+
+  /** ticket id → { appId, matchedBy }. Rebuilt lazily after any write or sync. */
+  private ticketIndex: Map<string, { appId: string | null; matchedBy: TicketRow["matchedBy"] }> | null = null;
+
+  private ticketMatcher() {
+    const STOP = new Set(["its", "it", "one", "all", "app", "portal", "sync", "api", "the", "and", "flow", "review", "register", "dashboard", "desk", "client"]);
+    const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const terms: { re: RegExp; len: number; appId: string }[] = [];
+    for (const a of this.db.apps) {
+      const own = new Set(a.ticketKeywords.map((k) => k.trim().toLowerCase()));
+      const words = new Set<string>([...a.ticketKeywords, a.name, a.code.replace(/_/g, " ")]);
+      for (const raw of words) {
+        const w = raw.trim();
+        if (w.length < 2 || (!own.has(w.toLowerCase()) && STOP.has(w.toLowerCase()))) continue;
+        terms.push({ re: new RegExp(`(^|[^a-z0-9])${esc(w).replace(/\\? /g, "[\\s_-]*")}($|[^a-z0-9])`, "i"), len: w.length, appId: a.id });
+      }
+    }
+    terms.sort((x, y) => y.len - x.len); // most specific first
+    const appIds = new Set(this.db.apps.map((a) => a.id));
+    return (t: Ticket): { appId: string | null; matchedBy: TicketRow["matchedBy"] } => {
+      if (t.overrideAppId && appIds.has(t.overrideAppId)) return { appId: t.overrideAppId, matchedBy: "manual" };
+      for (const r of this.db.ticketRules) {
+        if (!appIds.has(r.appId)) continue;
+        const v = String(t[r.field] ?? "").toLowerCase();
+        if (v && v.includes(r.contains.toLowerCase())) return { appId: r.appId, matchedBy: "rule" };
+      }
+      const text = [t.subject, t.category, t.subcategory, t.item].join(" | ");
+      for (const term of terms) if (term.re.test(text)) return { appId: term.appId, matchedBy: "keyword" };
+      return { appId: null, matchedBy: "" };
+    };
+  }
+
+  private ticketMatches() {
+    if (!this.ticketIndex) {
+      const match = this.ticketMatcher();
+      this.ticketIndex = new Map(this.db.tickets.map((t) => [t.id, match(t)]));
+    }
+    return this.ticketIndex;
+  }
+
+  private ticketCounts(appId: string): TicketCounts {
+    const idx = this.ticketMatches();
+    const since = new Date(Date.now() - 30 * 864e5).toISOString();
+    const c: TicketCounts = { open: 0, high: 0, created30: 0, total: 0 };
+    for (const t of this.db.tickets) {
+      if (idx.get(t.id)?.appId !== appId) continue;
+      c.total++;
+      if (t.open) { c.open++; if (/high|urgent|critical|p1|p2/i.test(t.priority)) c.high++; }
+      if (t.createdAt >= since) c.created30++;
+    }
+    return c;
+  }
+
+  /** Called by the ServiceDesk Plus sync (server) — upserts by id and keeps hand-made app assignments. */
+  ingestTickets(list: Ticket[], meta: { total?: number } = {}) {
+    const byId = new Map(this.db.tickets.map((t) => [t.id, t]));
+    let added = 0;
+    for (const t of list) {
+      const prev = byId.get(t.id);
+      if (prev) Object.assign(prev, t, { overrideAppId: prev.overrideAppId });
+      else { this.db.tickets.push(t); byId.set(t.id, t); added++; }
+    }
+    // drop the made-up sample tickets once real ones arrive
+    if (list.some((t) => t.source === "sdp")) this.db.tickets = this.db.tickets.filter((t) => !t.id.startsWith("sample-"));
+    if (this.db.tickets.length > 20000) this.db.tickets = this.db.tickets.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20000);
+    const now = nowIso();
+    this.db.ticketSync = { ...this.db.ticketSync, lastRun: now, lastOk: now, error: "", fetched: list.length, total: meta.total ?? this.db.ticketSync.total };
+    this.ticketIndex = null;
+    return { added, updated: list.length - added };
+  }
+  ticketSyncFailed(error: string) {
+    this.db.ticketSync = { ...this.db.ticketSync, lastRun: nowIso(), error: error.slice(0, 500) };
+  }
+
+  private ticketRows(user: UserRecord, appId?: string | null) {
+    const idx = this.ticketMatches();
+    const apps = new Map(this.visibleApps(user).map((a) => [a.id, a]));
+    const out: TicketRow[] = [];
+    for (const t of this.db.tickets) {
+      const m = idx.get(t.id) ?? { appId: null, matchedBy: "" as const };
+      if (appId !== undefined && m.appId !== appId) continue;
+      if (m.appId ? !apps.has(m.appId) : user.role === "viewer") continue;
+      const a = m.appId ? apps.get(m.appId)! : null;
+      out.push({ ...t, appId: m.appId, matchedBy: m.matchedBy, appName: a?.name ?? "", appTone: a?.tone ?? 1 });
+    }
+    return out.sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+  }
+
+  private rowToTicket(row: Record<string, unknown>, i: number): Ticket | null {
+    const subject = clean(row.subject, 300);
+    if (!subject) return null;
+    const displayId = clean(row.displayId, 40) || String(i + 1);
+    const status = clean(row.status, 60) || "Open";
+    const date = (v: unknown) => { const d = normalizeDate(v); return d ? new Date(d + "T09:00:00").toISOString() : ""; };
+    return {
+      id: `imp-${displayId}`, displayId, subject, status, statusColor: "", open: !CLOSED_STATUS.test(status), priority: clean(row.priority, 40),
+      category: clean(row.category, 80), subcategory: clean(row.subcategory, 80), item: clean(row.item, 80), group: clean(row.group, 80), site: clean(row.site, 80),
+      requester: clean(row.requester, 120), requesterDept: clean(row.requesterDept, 120), technician: clean(row.technician, 120),
+      createdAt: date(row.createdAt) || nowIso(), dueAt: date(row.dueAt), closedAt: date(row.closedAt), url: clean(row.url, 500), source: "import", overrideAppId: null,
+    };
   }
 
   /* ---------------------------------------------------- handlers ---------------------------------------------------- */
@@ -731,6 +842,59 @@ export class Service {
     }, { write: true });
 
     /** Every task the user can see, across all applications (the global Tasks page). */
+
+    /* ---------- tickets ---------- */
+    this.on("tickets.list", (ctx, p: { appId?: string }) => {
+      if (p.appId) this.app(ctx, p.appId, "view");
+      return this.ticketRows(ctx.user, p.appId);
+    });
+    this.on("tickets.status", (ctx) => ({
+      sync: this.db.ticketSync,
+      rules: this.db.ticketRules,
+      total: this.db.tickets.length,
+      sample: this.db.tickets.some((t) => t.id.startsWith("sample-")),
+      canManage: ctx.user.role === "admin",
+    }));
+    this.on("tickets.assign", (ctx, p: { ids: string[]; appId: string | null }) => {
+      const target = p.appId ? this.app(ctx, p.appId, "edit") : null;
+      if (!target && ctx.user.role === "viewer") throw new ApiError(403, "View-only users can't reassign tickets.");
+      const ids = new Set(Array.isArray(p.ids) ? p.ids : []);
+      const list = this.db.tickets.filter((t) => ids.has(t.id));
+      for (const t of list) t.overrideAppId = target?.id ?? null;
+      this.log(ctx, "update", "ticket", null, target, target ? `Linked ${list.length} ticket(s) to ${target.name}` : `Reset the app link on ${list.length} ticket(s)`);
+      return { updated: list.length };
+    }, { write: true });
+    this.on("tickets.rules.save", (ctx, p: { id?: string; field: string; contains: string; appId: string }) => {
+      this.admin(ctx);
+      const app = this.app(ctx, p.appId, "view");
+      const field = (TICKET_RULE_FIELDS as readonly string[]).includes(p.field) ? (p.field as TicketRuleField) : null;
+      const contains = clean(p.contains, 80);
+      if (!field || !contains) throw new ApiError(400, "Pick a field and the text it should contain.");
+      const existing = p.id ? this.db.ticketRules.find((r) => r.id === p.id) : null;
+      if (existing) Object.assign(existing, { field, contains, appId: app.id });
+      else this.db.ticketRules.push({ id: uid(), field, contains, appId: app.id, createdAt: nowIso() });
+      this.log(ctx, "update", "ticket-rule", null, app, `Tickets whose ${field} contains “${contains}” → ${app.name}`);
+      return this.db.ticketRules;
+    }, { write: true });
+    this.on("tickets.rules.delete", (ctx, p: { id: string }) => {
+      this.admin(ctx);
+      this.db.ticketRules = this.db.ticketRules.filter((r) => r.id !== p.id);
+      this.log(ctx, "delete", "ticket-rule", p.id, null, "Removed a ticket matching rule");
+      return this.db.ticketRules;
+    }, { write: true });
+    this.on("tickets.import", (ctx, p: { rows: Record<string, unknown>[] }) => {
+      if (ctx.user.role === "viewer") throw new ApiError(403, "View-only users can't import tickets.");
+      const result: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+      const list: Ticket[] = [];
+      (p.rows ?? []).forEach((row, i) => { const t = this.rowToTicket(row, i); if (t) list.push(t); else { result.skipped++; result.errors.push(`Row ${i + 1}: no subject`); } });
+      this.db.tickets = this.db.tickets.filter((t) => !t.id.startsWith("sample-"));
+      const r = this.ingestTickets(list);
+      this.db.ticketSync.fetched = list.length;
+      result.created = r.added; result.updated = r.updated;
+      this.log(ctx, "import", "ticket", null, null, `Imported ${list.length} helpdesk ticket(s)`);
+      return result;
+    }, { write: true });
+
     this.on("tasks.all", (ctx) => {
       const apps = new Map(this.visibleApps(ctx.user).map((a) => [a.id, a]));
       const groups = new Map(this.db.groups.map((g) => [g.id, g]));
@@ -1114,6 +1278,7 @@ export class Service {
     if (row.hosting) out.hosting = row.hosting;
     if (row.vendor) { out.vendor = row.vendor; out.source = "vendor"; }
     if (row.source) out.source = row.source;
+    if (row.ticketKeywords) out.ticketKeywords = row.ticketKeywords;
     if (row.owner) {
       const key = String(row.owner).toLowerCase().trim();
       const owner = this.db.users.find((u) => u.name.toLowerCase() === key || u.username === key || u.email.toLowerCase() === key);
@@ -1140,6 +1305,7 @@ export class Service {
     if ("hosting" in p) { const h = normHosting(p.hosting); if (h !== null) set("hosting", h); }
     if ("source" in p) set("source", String(p.source).toLowerCase().startsWith("v") || String(p.source).toLowerCase().includes("third") ? "vendor" : "in-house");
     if ("vendor" in p) set("vendor", clean(p.vendor, 80));
+    if ("ticketKeywords" in p) set("ticketKeywords", splitList(p.ticketKeywords).map((k) => k.slice(0, 60)).slice(0, 30));
     if ("tone" in p) set("tone", (Math.min(5, Math.max(1, Number(p.tone) || 1)) as Tone));
     for (const k of ["startDate", "goLiveDate"] as const) if (k in p) set(k, normalizeDate(p[k]));
     void partial;
@@ -1149,7 +1315,7 @@ export class Service {
     const now = nowIso();
     const app: App = {
       id: uid(), name: "", code: "", tagline: "", description: "", category: "Internal tool", department: "", status: "planning", priority: "medium",
-      url: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "", source: "in-house", vendor: "", tone: ((this.db.apps.length % 5) + 1) as Tone,
+      url: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "", source: "in-house", vendor: "", ticketKeywords: [], tone: ((this.db.apps.length % 5) + 1) as Tone,
       startDate: ymd(), goLiveDate: "", visibility: "public", acl: {}, createdAt: now, updatedAt: now, createdBy: ctx.user.id,
     };
     this.applyAppFields(app, p);

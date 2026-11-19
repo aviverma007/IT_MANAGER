@@ -12,6 +12,7 @@ import AppsPage from "@/pages/apps";
 import AppDetailPage from "@/pages/app-detail";
 import TeamPage from "@/pages/team";
 import TasksPage from "@/pages/tasks";
+import TicketsPage from "@/pages/tickets";
 import LogsPage from "@/pages/logs";
 import UsersPage from "@/pages/users";
 import SettingsPage from "@/pages/settings";
@@ -45,6 +46,7 @@ function Gate() {
         <Route path="apps/:id" element={<AppDetailPage />} />
         <Route path="apps/:id/:tab" element={<AppDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="tickets" element={<TicketsPage />} />
         <Route path="team" element={<TeamPage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="guide" element={<GuidePage />} />

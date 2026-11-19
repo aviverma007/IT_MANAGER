@@ -62,6 +62,8 @@ export interface App {
   url: string;
   environments: EnvLink[];
   techStack: string[];
+  /** Extra words that identify this app in helpdesk tickets (subject / category / item). */
+  ticketKeywords: string[];
   ownerId: string | null;
   version: string;
   cover: string;
@@ -238,7 +240,43 @@ export interface DB {
   tracking: TrackSession[];
   favorites: { userId: string; appId: string }[];
   logs: LogEntry[];
+  tickets: Ticket[];
+  ticketRules: TicketRule[];
+  ticketSync: TicketSync;
 }
+
+/* ---------- helpdesk tickets (ManageEngine ServiceDesk Plus or Excel import) ---------- */
+
+export interface Ticket {
+  id: string; // helpdesk's own id
+  displayId: string; // the #number people see
+  subject: string;
+  status: string;
+  statusColor: string;
+  open: boolean;
+  priority: string;
+  category: string;
+  subcategory: string;
+  item: string;
+  group: string;
+  site: string;
+  requester: string;
+  requesterDept: string;
+  technician: string;
+  createdAt: string; // ISO
+  dueAt: string;
+  closedAt: string;
+  url: string;
+  source: "sdp" | "import";
+  /** Set by hand — wins over rules and keywords. */
+  overrideAppId: string | null;
+}
+export const TICKET_RULE_FIELDS = ["category", "subcategory", "item", "group", "subject", "requesterDept", "site"] as const;
+export type TicketRuleField = (typeof TICKET_RULE_FIELDS)[number];
+export interface TicketRule { id: string; field: TicketRuleField; contains: string; appId: string; createdAt: string }
+export interface TicketSync { lastRun: string | null; lastOk: string | null; error: string; fetched: number; total: number }
+export interface TicketRow extends Ticket { appId: string | null; matchedBy: "manual" | "rule" | "keyword" | ""; appName: string; appTone: number }
+export interface TicketCounts { open: number; high: number; created30: number; total: number }
 
 /* ---------- view models returned by the API ---------- */
 
@@ -266,6 +304,7 @@ export interface AppSummary extends App {
   coverShot: CoverShot;
   shotCount: number;
   /** Landscape view: who is really using it vs. licensed seats */
+  tickets: TicketCounts;
   landscape: { activeUsers: number; activeSource: "tracked" | "manual" | "logged" | "none"; utilization: number | null };
 }
 

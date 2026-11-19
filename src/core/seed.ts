@@ -7,7 +7,7 @@ import { IT_MANAGER_SCREENS } from "./seed-screens";
 import type { Screenshot } from "./types";
 
 export function emptyDb(): DB {
-  return { version: 1, users: [], sessions: [], apps: [], groups: [], tasks: [], usage: [], launches: [], docs: [], releases: [], attachments: [], screenshots: [], tracking: [], favorites: [], logs: [] };
+  return { version: 1, users: [], sessions: [], apps: [], groups: [], tasks: [], usage: [], launches: [], docs: [], releases: [], attachments: [], screenshots: [], tracking: [], favorites: [], logs: [], tickets: [], ticketRules: [], ticketSync: { lastRun: null, lastOk: null, error: "", fetched: 0, total: 0 } };
 }
 
 async function makeUser(p: Pick<UserRecord, "username" | "name" | "email" | "role" | "title" | "department" | "bio" | "tone">, password: string): Promise<UserRecord> {
@@ -71,7 +71,7 @@ export async function sampleDb(): Promise<DB> {
       description: `${s.tagline}. Built and maintained in-house by the IT team for the ${s.department} team.`,
       category: s.category, department: s.department, status: s.status, priority: s.priority, url: s.url ?? "",
       environments: s.envs ?? [], techStack: s.techStack,
-      ownerId: s.department === "Human Resources" ? nisha.id : admin.id, version: s.version, cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "on-prem", source: "in-house", vendor: "", tone: s.tone,
+      ownerId: s.department === "Human Resources" ? nisha.id : admin.id, version: s.version, cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "on-prem", source: "in-house", vendor: "", ticketKeywords: s.code === "QMS_SAP_PR" ? ["QMS"] : s.code === "DASHBOARD_SWD" ? ["dashboard"] : [], tone: s.tone,
       startDate: addDays(today, -(90 + ai * 30)), goLiveDate: ["live", "maintenance"].includes(s.status) ? addDays(today, -(s.months * 30)) : addDays(today, 20 + ai * 9),
       visibility: s.code === "M3M_ONE" ? "restricted" : "public",
       acl: s.code === "M3M_ONE" ? { [editor.id]: "edit" } : s.department === "Accounts" || s.code === "LEASING_SWD" ? { [viewer.id]: "view" } : {},
@@ -142,7 +142,7 @@ export async function sampleDb(): Promise<DB> {
       id: uid(), name: "IT Manager", code: "IT_MANAGER", tagline: "Portfolio manager for every internal application — progress, usage, docs, rights and audit",
       description: "One place to list every application the IT team builds or runs: checklist-driven progress, usage tracking, user manuals, release history, real screenshots, per-person access rights and a full audit log.",
       category: "IT operations", department: "IT", status: "uat", priority: "high", url: "", environments: [],
-      techStack: ["React", "TypeScript", "Tailwind", "Node.js", "Express"], ownerId: admin.id, version: "1.1.0", cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "on-prem", source: "in-house", vendor: "", tone: 1,
+      techStack: ["React", "TypeScript", "Tailwind", "Node.js", "Express"], ownerId: admin.id, version: "1.1.0", cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "on-prem", source: "in-house", vendor: "", ticketKeywords: [], tone: 1,
       startDate: addDays(today, -1), goLiveDate: addDays(today, 14), visibility: "public", acl: {}, createdAt: created, updatedAt: created, createdBy: admin.id,
     };
     db.apps.push(app);
@@ -182,5 +182,38 @@ export async function sampleDb(): Promise<DB> {
     const entry: LogEntry = { id: uid(), at: new Date(Date.now() - (i + 1) * 3.7 * 3600e3).toISOString(), userId: u.id, userName: u.name, action, entity, entityId: app.id, appId: app.id, appName: app.name, summary, changes: [] };
     db.logs.push(entry);
   });
+  db.tickets = sampleTickets();
   return db;
+}
+
+/** A few made-up helpdesk tickets so the Tickets page has something to show before ServiceDesk Plus is connected. */
+function sampleTickets(): DB["tickets"] {
+  const rows: [string, string, string, string, number][] = [
+    ["SmartDesk login page not loading", "Software", "SmartDesk", "High", 1],
+    ["SmartDesk leave balance wrong", "Software", "SmartDesk", "Medium", 3],
+    ["Unable to raise visitor pass in SmartDesk", "Software", "SmartDesk", "Medium", 6],
+    ["Smart Leasing invoice PDF missing GST", "Software", "Smart Leasing", "High", 2],
+    ["Leasing billing run stuck", "Software", "Smart Leasing", "Urgent", 0],
+    ["Dashboard numbers not refreshing", "Software", "Dashboard", "Medium", 4],
+    ["Cheque Register export to Excel fails", "Software", "Cheque Register", "Low", 9],
+    ["MC Review approval mail not received", "Software", "MC Review", "High", 1],
+    ["NFA stuck at level 2 in MC Review", "Software", "MC Review", "Medium", 12],
+    ["HR Careers portal referral form error", "Software", "HR Portal", "Medium", 5],
+    ["QMS PR report missing yesterday's PRs", "Software", "SAP", "High", 2],
+    ["VendorGlobe sync failed overnight", "Software", "SAP", "High", 1],
+    ["M3M One project page slow", "Software", "M3M One", "Low", 8],
+    ["Document Flow access request", "Access", "Document Flow", "Low", 15],
+    ["Printer Installation", "Hardware", "Printer", "Low", 3],
+    ["Need a laptop for new joiner", "Hardware", "Laptop", "Medium", 7],
+    ["Outlook not syncing", "Software", "Outlook", "Medium", 2],
+  ];
+  const day = 864e5;
+  return rows.map(([subject, category, subcategory, priority, ago], i) => {
+    const open = i % 3 !== 2;
+    return {
+      id: `sample-${i + 1}`, displayId: String(4100 + i), subject, status: open ? (i % 2 ? "In Progress" : "Open") : "Resolved", statusColor: open ? (i % 2 ? "#3b82f6" : "#f59e0b") : "#10b981", open, priority,
+      category, subcategory, item: "", group: "IT Support", site: "IFC", requester: "Sample user", requesterDept: "", technician: i % 2 ? "Ravi Shankar" : "",
+      createdAt: new Date(Date.now() - ago * day).toISOString(), dueAt: "", closedAt: open ? "" : new Date(Date.now() - Math.max(0, ago - 1) * day).toISOString(), url: "", source: "import" as const, overrideAppId: null,
+    };
+  });
 }
