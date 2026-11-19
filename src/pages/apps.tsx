@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import * as XLSX from "xlsx";
 import {
-  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users, Users2,
+  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users2,
 } from "lucide-react";
 import { useApps, useRun } from "@/api/hooks";
 import { useMe } from "@/lib/auth";
@@ -22,6 +22,7 @@ import { cn, fmtDate, fmtNumber, STATUS_HEX, STATUS_META, toneHex } from "@/lib/
 import { openApp } from "@/lib/launch";
 import { Landscape, utilColor } from "@/components/app/landscape";
 import { TicketBadge, TicketsOverview } from "@/components/app/tickets";
+import { PeopleChip, useOpenPeople } from "@/components/app/people";
 
 type View = "grid" | "list" | "board";
 type Sort = "updated" | "name" | "progress" | "usage" | "users" | "utilization" | "golive";
@@ -39,13 +40,12 @@ function FavoriteButton({ app }: { app: AppSummary }) {
 
 /** Users (active / seats) + usage % pill, used on cards, rows and board. */
 function UsersUsage({ app, compact }: { app: AppSummary; compact?: boolean }) {
-  const { activeUsers, utilization: u } = app.landscape;
+  const openPeople = useOpenPeople();
+  const { utilization: u } = app.landscape;
   return (
-    <span className={cn("inline-flex items-center gap-1.5 tabular-nums", compact ? "text-[11px]" : "text-xs")} title={u === null ? "Set licensed seats on the app to see usage %" : "Active users ÷ licensed seats"}>
-      <Users className={compact ? "size-3" : "size-3.5"} style={{ color: utilColor(u) }} />
-      <span className="font-semibold text-foreground">{fmtNumber(activeUsers)}</span>
-      <span className="text-muted-foreground">{app.seats ? `/ ${fmtNumber(app.seats)} users` : "users"}</span>
-      <span className="rounded-full px-1.5 py-px font-bold" style={{ color: utilColor(u), background: `color-mix(in oklab, ${utilColor(u)} 14%, transparent)` }}>{u === null ? "—" : `${u}%`}</span>
+    <span className={cn("inline-flex items-center gap-1 tabular-nums", compact ? "text-[11px]" : "text-xs")}>
+      <PeopleChip app={app} big={!compact} onOpen={() => openPeople(app)} />
+      <span className="rounded-full px-1.5 py-px font-bold" style={{ color: utilColor(u), background: `color-mix(in oklab, ${utilColor(u)} 14%, transparent)` }} title={u === null ? "Set licensed seats on the app to see % of seats in use" : "% of licensed seats in use"}>{u === null ? "—" : `${u}%`}</span>
     </span>
   );
 }

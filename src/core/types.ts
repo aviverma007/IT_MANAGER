@@ -242,7 +242,39 @@ export interface DB {
   logs: LogEntry[];
   tickets: Ticket[];
   ticketRules: TicketRule[];
+  appUsers: AppUser[];
+  appSeen: AppSeen[];
   ticketSync: TicketSync;
+}
+
+/* ---------- people who use each application ---------- */
+
+/** Someone listed as a user of an app (typed in or imported from a licence register). */
+export interface AppUser {
+  id: string;
+  appId: string;
+  name: string;
+  email: string;
+  department: string;
+  licence: string; // licence / role in that app, e.g. "Full", "Read-only", "Admin"
+  notes: string;
+  createdAt: string;
+}
+/** Rolled up from the tracking script: who actually opened the app, and when. */
+export interface AppSeen { id: string; appId: string; user: string; first: number; last: number; sessions: number; days: string[] }
+/** One row of an app's user list (listed and/or seen by the tracker). */
+export interface AppUserRow {
+  key: string;
+  listedId: string | null;
+  name: string;
+  email: string;
+  department: string;
+  licence: string;
+  notes: string;
+  tracked: boolean;
+  lastSeen: string | null; // ISO
+  activeDays30: number;
+  sessions: number;
 }
 
 /* ---------- helpdesk tickets (ManageEngine ServiceDesk Plus or Excel import) ---------- */
@@ -305,6 +337,8 @@ export interface AppSummary extends App {
   shotCount: number;
   /** Landscape view: who is really using it vs. licensed seats */
   tickets: TicketCounts;
+  /** listed users (names) and how many of them / others were seen by the tracker in 30 days */
+  people: { listed: number; seen30: number };
   landscape: { activeUsers: number; activeSource: "tracked" | "manual" | "logged" | "none"; utilization: number | null };
 }
 

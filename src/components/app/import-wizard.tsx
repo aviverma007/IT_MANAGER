@@ -10,7 +10,7 @@ import type { ImportResult } from "@/core/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-export type ImportKind = "apps" | "tasks" | "usage" | "tickets";
+export type ImportKind = "apps" | "tasks" | "usage" | "tickets" | "appusers";
 
 type FieldDef = { key: string; label: string; required?: boolean; synonyms: string[] };
 
@@ -55,6 +55,14 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: "avgMinutes", label: "Avg minutes", synonyms: ["avg minutes", "average minutes", "avg time", "duration", "time spent"] },
     { key: "notes", label: "Notes", synonyms: ["notes", "remarks", "comment"] },
   ],
+  appusers: [
+    { key: "app", label: "Application", synonyms: ["application", "app", "app name", "app code", "software", "system", "product"] },
+    { key: "name", label: "Name", required: true, synonyms: ["name", "user", "user name", "employee", "employee name", "full name", "person"] },
+    { key: "email", label: "Email", synonyms: ["email", "e-mail", "mail", "email id", "mail id", "login", "user id"] },
+    { key: "department", label: "Department", synonyms: ["department", "dept", "function", "team", "division"] },
+    { key: "licence", label: "Licence / role", synonyms: ["licence", "license", "licence type", "license type", "role", "access", "access level", "plan"] },
+    { key: "notes", label: "Notes", synonyms: ["notes", "remarks", "comment", "comments"] },
+  ],
   tickets: [
     { key: "displayId", label: "Request ID", synonyms: ["request id", "id", "ticket id", "ticket", "request no", "request number", "ticket number", "#"] },
     { key: "subject", label: "Subject", required: true, synonyms: ["subject", "title", "summary", "description", "issue"] },
@@ -87,6 +95,10 @@ const TEMPLATES: Record<ImportKind, Record<string, unknown>[]> = {
   usage: [
     { Application: "SMARTDESK", Date: "2026-11-15", "Active users": 96, Sessions: 210, Transactions: 540, "Avg minutes": 8.5, Notes: "" },
     { Application: "SMARTDESK", Date: "2026-11-16", "Active users": 102, Sessions: 225, Transactions: 580, "Avg minutes": 9.1, Notes: "" },
+  ],
+  appusers: [
+    { Application: "SAP", Name: "Anuj Goel", Email: "anuj.goel@company.com", Department: "Finance & Accounts", Licence: "Professional", Notes: "" },
+    { Application: "SAP", Name: "Shreya Goel", Email: "shreya.goel@company.com", Department: "Legal", Licence: "Limited", Notes: "" },
   ],
   tickets: [
     { "Request ID": 4101, Subject: "SmartDesk login page not loading", Status: "Open", Priority: "High", Category: "Software", Subcategory: "SmartDesk", Item: "", Group: "IT Support", Technician: "Ravi Shankar", Requester: "Anuj Goel", Department: "Finance & Accounts", Site: "IFC", "Created Time": "2026-11-18", "Resolved Time": "" },
@@ -123,7 +135,7 @@ export function downloadTemplate(kind: ImportKind) {
 
 export function ImportWizard({ open, onClose, kind, appId, appName }: { open: boolean; onClose: () => void; kind: ImportKind; appId?: string; appName?: string }) {
   const run = useRun();
-  const fields = IMPORT_FIELDS[kind].filter((f) => !(kind === "usage" && appId && f.key === "app"));
+  const fields = IMPORT_FIELDS[kind].filter((f) => !((kind === "usage" || kind === "appusers") && appId && f.key === "app"));
   const [step, setStep] = React.useState<0 | 1 | 2>(0);
   const [sheets, setSheets] = React.useState<Record<string, Record<string, unknown>[]>>({});
   const [sheet, setSheet] = React.useState("");
@@ -188,13 +200,13 @@ export function ImportWizard({ open, onClose, kind, appId, appName }: { open: bo
 
   async function submit() {
     setBusy(true);
-    const method = kind === "apps" ? "apps.import" : kind === "tasks" ? "tasks.import" : kind === "tickets" ? "tickets.import" : "usage.import";
+    const method = kind === "apps" ? "apps.import" : kind === "tasks" ? "tasks.import" : kind === "tickets" ? "tickets.import" : kind === "appusers" ? "appusers.import" : "usage.import";
     const res = await run<ImportResult>(method, { appId, rows: mapped });
     setBusy(false);
     if (res) { setResult(res); setStep(2); }
   }
 
-  const title = { apps: "Import applications", tasks: `Import tasks${appName ? ` into ${appName}` : ""}`, usage: `Import usage${appName ? ` for ${appName}` : ""}`, tickets: "Import helpdesk tickets (ServiceDesk Plus export)" }[kind];
+  const title = { apps: "Import applications", tasks: `Import tasks${appName ? ` into ${appName}` : ""}`, usage: `Import usage${appName ? ` for ${appName}` : ""}`, tickets: "Import helpdesk tickets (ServiceDesk Plus export)", appusers: `Import users${appName ? ` of ${appName}` : " (licence register)"}` }[kind];
 
   return (
     <Modal open={open} onClose={onClose} title={title} description="Excel (.xlsx/.xls), CSV, TSV, ODS, JSON or a table pasted from anywhere." icon={<FileSpreadsheet />} size="xl"
@@ -256,7 +268,7 @@ export function ImportWizard({ open, onClose, kind, appId, appName }: { open: bo
                 </div>
               ))}
             </div>
-            {kind === "usage" && !appId && !map.app && <p className="text-xs text-warning">Map the Application column so each row lands on the right app (matched by code or name).</p>}
+            {(kind === "usage" || kind === "appusers") && !appId && !map.app && <p className="text-xs text-warning">Map the Application column so each row lands on the right app (matched by code or name).</p>}
             <div className="overflow-hidden rounded-2xl border border-border">
               <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">Preview — first {Math.min(8, mapped.length)} rows after mapping</div>
               <div className="max-h-64 overflow-auto">

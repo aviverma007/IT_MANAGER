@@ -12,6 +12,7 @@ import { AnimatedNumber, ProgressRing, Tabs } from "@/components/ui/bits";
 import { useConfirm } from "@/components/ui/modal";
 import { coverFor } from "@/lib/covers";
 import { TicketDrawer, TicketHoverChip } from "@/components/app/tickets";
+import { PeopleChip, useOpenPeople } from "@/components/app/people";
 import { Ticket as TicketIcon } from "lucide-react";
 import { cn, fmtNumber } from "@/lib/utils";
 
@@ -74,6 +75,7 @@ function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: strin
   const highT = apps.reduce((s, a) => s + (a.tickets?.high ?? 0), 0);
   const anyT = apps.some((a) => a.tickets?.total);
   const [all, setAll] = React.useState(false);
+  const openPeople = useOpenPeople();
   const t = totals(apps);
   const sorted = [...apps].sort((a, b) => b.landscape.activeUsers - a.landscape.activeUsers || a.name.localeCompare(b.name));
   const shown = all ? sorted : sorted.slice(0, 6);
@@ -105,11 +107,7 @@ function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: strin
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5 truncate text-[15px] font-semibold">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm tabular-nums" title={a.landscape.activeSource === "tracked" ? "Active users from usage tracking (busiest day, last 30 days)" : a.landscape.activeSource === "manual" ? "Active users entered on the app" : a.landscape.activeSource === "logged" ? "Active users from usage entries (busiest day, last 30 days)" : "No user figures yet"}>
-                        <Users className="size-3.5 text-muted-foreground" />
-                        <b>{fmtNumber(a.landscape.activeUsers)}</b><span className="text-muted-foreground">{a.seats ? ` / ${fmtNumber(a.seats)} users` : " users"}</span>
-                        {a.landscape.activeSource === "tracked" && <span className="text-[10px] font-semibold uppercase text-emerald-600 dark:text-emerald-400">live</span>}
-                      </span>
+                      <PeopleChip app={a} big onOpen={() => openPeople(a)} />
                       {a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : null}
                     </span>
                   </span>

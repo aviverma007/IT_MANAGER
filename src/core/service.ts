@@ -5,7 +5,7 @@ import type {
   ImportResult, Launch, LogEntry, Paged, Priority, Role, Task, TaskGroup, Tone, UsageEntry, UsageSummary, User, UserRecord,
 } from "./types";
 import { APP_STATUSES, DOC_KINDS, HOSTINGS, PRIORITIES, TICKET_RULE_FIELDS } from "./types";
-import type { Ticket, TicketCounts, TicketRow, TicketRuleField } from "./types";
+import type { AppUser, AppUserRow, Ticket, TicketCounts, TicketRow, TicketRuleField } from "./types";
 import { hashPassword, newSalt, newToken, verifyPassword } from "./crypto";
 import { addDays, normalizeDate, nowIso, splitList, toBool, toNumber, uid, ymd } from "./util";
 import { emptyDb, freshDb, sampleDb } from "./seed";
@@ -253,6 +253,7 @@ export class Service {
       coverShot: this.coverShot(app),
       landscape: this.landscapeOf(app),
       tickets: this.ticketCounts(app.id),
+      people: this.peopleCounts(app.id),
       shotCount: this.db.screenshots.filter((x) => x.appId === app.id).length,
     };
   }
@@ -280,8 +281,9 @@ export class Service {
       if (u.source === "auto") tracked = Math.max(tracked, u.activeUsers);
       else logged = Math.max(logged, u.activeUsers);
     }
-    const activeUsers = tracked || app.activeUsersManual || logged;
-    const activeSource = tracked ? "tracked" : app.activeUsersManual ? "manual" : logged ? "logged" : "none";
+    const listed = this.db.appUsers.filter((u) => u.appId === app.id).length;
+    const activeUsers = tracked || app.activeUsersManual || listed || logged;
+    const activeSource = tracked ? "tracked" : app.activeUsersManual || listed ? "manual" : logged ? "logged" : "none";
     return { activeUsers, activeSource, utilization: app.seats && activeUsers ? Math.round((activeUsers / app.seats) * 100) : app.seats ? 0 : null };
   }
 
@@ -339,11 +341,58 @@ export class Service {
     }
     s.last = now;
     s.hits++;
+    const who = clean(e.user, 120) || s.user;
+    const newSessionForUser = !!who && (s.hits === 1 || !s.user);
     if (e.user) s.user = clean(e.user, 120);
+    if (who) this.seen(app.id, who, now, date, newSessionForUser);
     const page = clean(e.page, 200) || "/";
     if (e.ev === "start" || e.ev === "page") s.pages[page] = (s.pages[page] ?? 0) + 1;
     this.rollUp(app.id, date);
     return app;
+  }
+
+  /** Per-user "last seen" kept for 90 days (raw sessions are pruned after 3). */
+  private seen(appId: string, user: string, now: number, date: string, newSession: boolean) {
+    const id = `${appId}|${user.toLowerCase()}`;
+    let r = this.db.appSeen.find((x) => x.id === id);
+    if (!r) { r = { id, appId, user, first: now, last: now, sessions: 0, days: [] }; this.db.appSeen.push(r); }
+    r.last = now;
+    r.user = user;
+    if (newSession) r.sessions++;
+    if (r.days[r.days.length - 1] !== date) {
+      r.days.push(date);
+      const cutoff = addDays(ymd(), -89);
+      r.days = r.days.filter((d) => d >= cutoff);
+    }
+  }
+
+  /** Listed users merged with people the tracker saw. Matched by email, then by name (case-insensitive). */
+  appUserRows(appId: string): AppUserRow[] {
+    const from30 = addDays(ymd(), -29);
+    const rows: AppUserRow[] = this.db.appUsers.filter((u) => u.appId === appId).map((u) => ({
+      key: u.id, listedId: u.id, name: u.name, email: u.email, department: u.department, licence: u.licence, notes: u.notes,
+      tracked: false, lastSeen: null, activeDays30: 0, sessions: 0,
+    }));
+    const people = new Map(this.db.users.map((u) => [u.username.toLowerCase(), u]));
+    for (const s of this.db.appSeen.filter((x) => x.appId === appId)) {
+      const k = s.user.toLowerCase();
+      const row = rows.find((r) => (r.email && r.email.toLowerCase() === k) || r.name.toLowerCase() === k);
+      const seen = { tracked: true, lastSeen: new Date(s.last).toISOString(), activeDays30: s.days.filter((d) => d >= from30).length, sessions: s.sessions };
+      if (row) Object.assign(row, seen);
+      else {
+        const known = people.get(k);
+        rows.push({ key: s.id, listedId: null, name: known?.name ?? s.user, email: s.user.includes("@") ? s.user : known?.email ?? "", department: known?.department ?? "", licence: "", notes: "", ...seen });
+      }
+    }
+    return rows.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "") || a.name.localeCompare(b.name));
+  }
+
+  private peopleCounts(appId: string) {
+    const from30 = addDays(ymd(), -29);
+    return {
+      listed: this.db.appUsers.filter((u) => u.appId === appId).length,
+      seen30: this.db.appSeen.filter((x) => x.appId === appId && x.days.some((d) => d >= from30)).length,
+    };
   }
 
   /** Recompute the day's automatic usage entry from tracked sessions (keeps manual transactions & notes). */
@@ -707,7 +756,7 @@ export class Service {
       if (ctx.user.role === "viewer") throw new ApiError(403, "Viewers can't delete applications.");
       const id = app.id;
       this.db.apps = this.db.apps.filter((a) => a.id !== id);
-      for (const key of ["groups", "tasks", "usage", "launches", "docs", "releases", "attachments", "screenshots", "tracking", "favorites"] as const) {
+      for (const key of ["groups", "tasks", "usage", "launches", "docs", "releases", "attachments", "screenshots", "tracking", "favorites", "appUsers", "appSeen"] as const) {
         (this.db[key] as { appId: string }[]) = (this.db[key] as { appId: string }[]).filter((x) => x.appId !== id);
       }
       this.log(ctx, "delete", "app", id, app, `Deleted application ${app.name}`);
@@ -886,6 +935,51 @@ export class Service {
     }, { write: true });
 
     /** Every task the user can see, across all applications (the global Tasks page). */
+
+
+    /* ---------- people who use each app ---------- */
+    this.on("appusers.list", (ctx, p: { appId: string }) => {
+      this.app(ctx, p.appId, "view");
+      return this.appUserRows(p.appId);
+    });
+    this.on("appusers.save", (ctx, p: Partial<AppUser> & { appId: string }) => {
+      const app = this.app(ctx, p.appId, "edit");
+      const name = clean(p.name, 120);
+      if (!name) throw new ApiError(400, "Name is required.");
+      const fields = { name, email: clean(p.email, 160), department: clean(p.department, 120), licence: clean(p.licence, 60), notes: clean(p.notes, 400) };
+      const existing = p.id ? this.db.appUsers.find((u) => u.id === p.id && u.appId === app.id) : null;
+      if (existing) Object.assign(existing, fields);
+      else this.db.appUsers.push({ id: uid(), appId: app.id, ...fields, createdAt: nowIso() });
+      this.touch(app);
+      this.log(ctx, existing ? "update" : "create", "app-user", null, app, `${existing ? "Updated" : "Added"} ${name} as a user of ${app.name}`);
+      return this.appUserRows(app.id);
+    }, { write: true });
+    this.on("appusers.delete", (ctx, p: { appId: string; ids: string[] }) => {
+      const app = this.app(ctx, p.appId, "edit");
+      const ids = new Set(Array.isArray(p.ids) ? p.ids : []);
+      const n = this.db.appUsers.filter((u) => u.appId === app.id && ids.has(u.id)).length;
+      this.db.appUsers = this.db.appUsers.filter((u) => !(u.appId === app.id && ids.has(u.id)));
+      this.log(ctx, "delete", "app-user", null, app, `Removed ${n} user(s) from ${app.name}`);
+      return this.appUserRows(app.id);
+    }, { write: true });
+    this.on("appusers.import", (ctx, p: { appId?: string; rows: Record<string, unknown>[] }) => {
+      const result: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+      const byKey = (v: unknown) => { const k = clean(v, 80).toLowerCase(); return this.db.apps.find((a) => a.code.toLowerCase() === k || a.name.toLowerCase() === k); };
+      (p.rows ?? []).forEach((row, i) => {
+        const app = p.appId ? this.db.apps.find((a) => a.id === p.appId) : byKey(row.app);
+        if (!app) { result.skipped++; result.errors.push(`Row ${i + 1}: application not found`); return; }
+        if (this.permission(ctx.user, app) !== "edit") { result.skipped++; result.errors.push(`Row ${i + 1}: no edit rights on ${app.name}`); return; }
+        const name = clean(row.name, 120);
+        if (!name) { result.skipped++; result.errors.push(`Row ${i + 1}: missing name`); return; }
+        const email = clean(row.email, 160);
+        const fields = { name, email, department: clean(row.department, 120), licence: clean(row.licence, 60), notes: clean(row.notes, 400) };
+        const existing = this.db.appUsers.find((u) => u.appId === app.id && ((email && u.email.toLowerCase() === email.toLowerCase()) || u.name.toLowerCase() === name.toLowerCase()));
+        if (existing) { Object.assign(existing, Object.fromEntries(Object.entries(fields).filter(([, v]) => v))); result.updated++; }
+        else { this.db.appUsers.push({ id: uid(), appId: app.id, ...fields, createdAt: nowIso() }); result.created++; }
+      });
+      this.log(ctx, "import", "app-user", null, p.appId ? this.db.apps.find((a) => a.id === p.appId) ?? null : null, `Imported app users: ${result.created} added, ${result.updated} updated`);
+      return result;
+    }, { write: true });
 
     /* ---------- tickets ---------- */
     this.on("tickets.list", (ctx, p: { appId?: string }) => {

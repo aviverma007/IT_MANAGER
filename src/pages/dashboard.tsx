@@ -1,4 +1,6 @@
 import * as React from "react";
+import { useOpenPeople } from "@/components/app/people";
+import { UsersRound } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -27,6 +29,7 @@ const item = { hidden: { opacity: 0, y: 24, scale: 0.97 }, show: { opacity: 1, y
 export default function DashboardPage() {
   const me = useMe();
   const navigate = useNavigate();
+  const openPeople = useOpenPeople();
   const { data: stats, isLoading } = useDashboard();
   const { data: apps } = useApps();
   const [active, setActive] = React.useState<number | null>(null);
@@ -117,6 +120,7 @@ export default function DashboardPage() {
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button variant="primary" size="sm" disabled={active === null} onClick={() => active !== null && navigate(`/apps/${wall.list[active]!.id}`)}><ArrowRight />Open app page</Button>
+                <Button variant="secondary" size="sm" disabled={active === null} onClick={() => active !== null && openPeople(wall.list[active]!)}><UsersRound />Users</Button>
                 <Button variant="secondary" size="sm" disabled={active === null || !wall.list[active]?.url} onClick={() => active !== null && openApp(wall.list[active]!)}><ExternalLink />Launch</Button>
               </div>
             }

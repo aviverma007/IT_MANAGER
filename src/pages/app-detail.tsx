@@ -22,10 +22,12 @@ import { FilesTab } from "@/components/app/tabs/files";
 import { AccessTab } from "@/components/app/tabs/access";
 import { ActivityTab } from "@/components/app/tabs/activity";
 import { TicketsTab } from "@/components/app/tickets";
+import { PeopleList } from "@/components/app/people";
+import { Users as UsersIcon } from "lucide-react";
 import { BrowserFrame, ScreensTab } from "@/components/app/tabs/screens";
 import { shotSrc } from "@/api/client";
 
-const TABS = ["overview", "screens", "tasks", "usage", "tickets", "docs", "releases", "files", "access", "activity"] as const;
+const TABS = ["overview", "screens", "tasks", "usage", "users", "tickets", "docs", "releases", "files", "access", "activity"] as const;
 type Tab = (typeof TABS)[number];
 
 function Health({ appId, url }: { appId: string; url: string }) {
@@ -122,6 +124,7 @@ export default function AppDetailPage() {
           { value: "screens", label: "Screens", icon: <Camera />, count: app.screenshots.length },
           { value: "tasks", label: "Tasks", icon: <CheckSquare />, count: app.tasksTotal - app.tasksDone },
           { value: "usage", label: "Usage", icon: <Activity /> },
+          { value: "users", label: "Users", icon: <UsersIcon />, count: app.people?.listed || undefined },
           { value: "tickets", label: "Tickets", icon: <Ticket />, count: app.tickets?.open },
           { value: "docs", label: "Docs & manual", icon: <BookOpen />, count: app.docs.length },
           { value: "releases", label: "Releases", icon: <Rocket />, count: app.releases.length },
@@ -137,6 +140,7 @@ export default function AppDetailPage() {
           {tab === "screens" && <ScreensTab app={app} />}
           {tab === "tasks" && <TasksTab app={app} />}
           {tab === "usage" && <UsageTab app={app} />}
+          {tab === "users" && <PeopleList app={app} />}
           {tab === "tickets" && <TicketsTab app={app} />}
           {tab === "docs" && <DocsTab app={app} />}
           {tab === "releases" && <ReleasesTab app={app} />}

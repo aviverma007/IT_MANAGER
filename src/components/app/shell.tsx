@@ -1,5 +1,6 @@
 import * as React from "react";
 import { NavLink, useLocation, useNavigate, useOutlet } from "react-router-dom";
+import { PeopleDrawerProvider } from "@/components/app/people";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import {
   ListChecks, Activity, AppWindow, BookOpen, ChevronsLeft, LayoutDashboard, LogOut, Menu, Moon, Plus, Search, Settings, ShieldCheck, Sun, Users, X, Ticket } from "lucide-react";
@@ -290,7 +291,7 @@ export function AppShell() {
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               className="px-4 pb-12 lg:px-0"
             >
-              <PresentOutlet />
+              <PeopleDrawerProvider><PresentOutlet /></PeopleDrawerProvider>
             </motion.main>
           </AnimatePresence>
         </div>
