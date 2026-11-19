@@ -1207,11 +1207,12 @@ export class Service {
 
     this.on("admin.loadLandscape", (ctx) => {
       this.admin(ctx);
-      let created = 0, updated = 0;
+      let created = 0, updated = 0, skipped = 0;
+      const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
       for (const item of LANDSCAPE) {
-        const keys = [item.name, ...(item.aliases ?? [])].map((k) => k.toLowerCase());
-        // vendor entries match by exact name only, so "VendorGlobe" never lands on the in-house "VendorGlobe API Sync"
-        const existing = this.db.apps.find((a) => keys.includes(a.name.toLowerCase()) || (item.inHouse && keys.includes(a.code.toLowerCase())));
+        const keys = [item.name, ...(item.aliases ?? [])].map(norm);
+        // vendor entries match by name only, so "VendorGlobe" never lands on the in-house "VendorGlobe API Sync"
+        const existing = this.db.apps.find((a) => keys.includes(norm(a.name)) || (item.inHouse && keys.includes(norm(a.code))));
         if (existing) {
           existing.seats = item.seats;
           if (!existing.activeUsersManual) existing.activeUsersManual = item.active;
@@ -1219,17 +1220,19 @@ export class Service {
           if (!existing.hosting && item.hosting) existing.hosting = item.hosting;
           this.touch(existing);
           updated++;
+        } else if (item.inHouse) {
+          skipped++; // your own apps are never created from the sheet — only matched ones get seat figures
         } else {
           const app = this.buildApp(ctx, {
             name: item.name, category: item.category, status: "live", seats: item.seats, activeUsersManual: item.active, hosting: item.hosting ?? "",
-            source: item.inHouse ? "in-house" : "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium",
+            source: "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium",
           });
           this.db.apps.push(app);
           created++;
         }
       }
-      this.log(ctx, "import", "app", null, null, `Loaded the application landscape: ${created} added, ${updated} updated (seats / active users)`);
-      return { created, updated };
+      this.log(ctx, "import", "app", null, null, `Loaded the application landscape: ${created} vendor apps added, ${updated} updated`);
+      return { created, updated, skipped };
     }, { write: true });
 
     this.on("admin.clearUsage", (ctx) => {

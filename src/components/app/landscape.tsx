@@ -174,7 +174,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
               {noSeats && (
                 <div className="glass flex flex-wrap items-center gap-3 rounded-3xl p-4 text-sm">
                   <span className="flex-1 text-muted-foreground">No licensed seats recorded yet, so utilization can't be worked out. Set <b className="text-foreground">Licensed seats</b> on each app (Edit → Basics){me.role === "admin" ? ", or load the full landscape from the Smartworld sheet." : "."}</span>
-                  {me.role === "admin" && <Button variant="primary" size="sm" onClick={loadLandscape}><Boxes />Load Smartworld landscape (47 apps)</Button>}
+                  {me.role === "admin" && <Button variant="primary" size="sm" onClick={loadLandscape}><Boxes />Load Smartworld landscape (34 vendor apps)</Button>}
                 </div>
               )}
 

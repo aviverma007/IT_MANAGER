@@ -44,23 +44,23 @@ export const LANDSCAPE: LandscapeItem[] = [
   L("Tekla", "Construction & Design", 12, 9, "desktop", { vendor: "Trimble" }),
   L("MSP", "Construction & Design", 25, 14, "desktop", { vendor: "Microsoft", tagline: "Microsoft Project" }),
   // Productivity
-  L("Microsoft 365", "Productivity", 1500, 1382, "saas", { vendor: "Microsoft" }),
-  L("Adobe CC", "Productivity", 20, 15, "saas", { vendor: "Adobe" }),
+  L("Microsoft 365", "Productivity", 1500, 1382, "saas", { vendor: "Microsoft", aliases: ["M365", "Office 365", "Miscrosoft 365"] }),
+  L("Adobe CC", "Productivity", 20, 15, "saas", { vendor: "Adobe", aliases: ["Adobe", "Adobe Creative Cloud"] }),
   L("Photoshop", "Productivity", 12, 7, "desktop", { vendor: "Adobe" }),
   L("Acrobat Pro", "Productivity", 150, 118, "desktop", { vendor: "Adobe" }),
   // AI Assistants
   L("Claude", "AI Assistants", 40, 36, "saas", { vendor: "Anthropic" }),
   L("ChatGPT", "AI Assistants", 60, 44, "saas", { vendor: "OpenAI" }),
-  L("Copilot", "AI Assistants", 80, 51, "saas", { vendor: "Microsoft" }),
+  L("Copilot", "AI Assistants", 80, 51, "saas", { vendor: "Microsoft", aliases: ["Co-pilot", "Microsoft Copilot"] }),
   // HR & Compliance
-  L("Adrenalin", "HR & Compliance", 1500, 1214, "saas", { vendor: "Adrenalin eSystems", tagline: "HRMS & payroll" }),
-  L("Ma Foi", "HR & Compliance", 8, 6),
+  L("Adrenalin", "HR & Compliance", 1500, 1214, "saas", { vendor: "Adrenalin eSystems", tagline: "HRMS & payroll", aliases: ["Adrenaline", "HRMS"] }),
+  L("Ma Foi", "HR & Compliance", 8, 6, "", { aliases: ["Mafoi"] }),
   L("Complinity", "HR & Compliance", 12, 10),
   // IT Ops & Analytics
-  L("ManageEngine", "IT Ops & Analytics", 20, 18, "", { vendor: "Zoho" }),
+  L("ManageEngine", "IT Ops & Analytics", 20, 18, "saas", { vendor: "Zoho", aliases: ["Manage Engine", "ServiceDesk Plus"] }),
   L("ITS", "IT Ops & Analytics", 25, 19),
   L("Computex", "IT Ops & Analytics", 10, 8),
-  L("Power BI", "IT Ops & Analytics", 60, 48, "saas", { vendor: "Microsoft" }),
+  L("Power BI", "IT Ops & Analytics", 60, 48, "saas", { vendor: "Microsoft", aliases: ["PowerBI"] }),
   // In-house (built by IT) — matched to the existing IT Manager entries by name
   L("SmartDesk", "In-house", 1500, 1104, "on-prem", { inHouse: true }),
   L("Smart Leasing", "In-house", 24, 21, "on-prem", { inHouse: true }),
