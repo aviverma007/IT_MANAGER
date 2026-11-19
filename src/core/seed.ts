@@ -71,7 +71,7 @@ export async function sampleDb(): Promise<DB> {
       description: `${s.tagline}. Built and maintained in-house by the IT team for the ${s.department} team.`,
       category: s.category, department: s.department, status: s.status, priority: s.priority, url: s.url ?? "",
       environments: s.envs ?? [], techStack: s.techStack,
-      ownerId: s.department === "Human Resources" ? nisha.id : admin.id, version: s.version, cover: "", coverShotId: null, tone: s.tone,
+      ownerId: s.department === "Human Resources" ? nisha.id : admin.id, version: s.version, cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "on-prem", source: "in-house", vendor: "", tone: s.tone,
       startDate: addDays(today, -(90 + ai * 30)), goLiveDate: ["live", "maintenance"].includes(s.status) ? addDays(today, -(s.months * 30)) : addDays(today, 20 + ai * 9),
       visibility: s.code === "M3M_ONE" ? "restricted" : "public",
       acl: s.code === "M3M_ONE" ? { [editor.id]: "edit" } : s.department === "Accounts" || s.code === "LEASING_SWD" ? { [viewer.id]: "view" } : {},
@@ -142,7 +142,7 @@ export async function sampleDb(): Promise<DB> {
       id: uid(), name: "IT Manager", code: "IT_MANAGER", tagline: "Portfolio manager for every internal application — progress, usage, docs, rights and audit",
       description: "One place to list every application the IT team builds or runs: checklist-driven progress, usage tracking, user manuals, release history, real screenshots, per-person access rights and a full audit log.",
       category: "IT operations", department: "IT", status: "uat", priority: "high", url: "", environments: [],
-      techStack: ["React", "TypeScript", "Tailwind", "Node.js", "Express"], ownerId: admin.id, version: "1.1.0", cover: "", coverShotId: null, tone: 1,
+      techStack: ["React", "TypeScript", "Tailwind", "Node.js", "Express"], ownerId: admin.id, version: "1.1.0", cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "on-prem", source: "in-house", vendor: "", tone: 1,
       startDate: addDays(today, -1), goLiveDate: addDays(today, 14), visibility: "public", acl: {}, createdAt: created, updatedAt: created, createdBy: admin.id,
     };
     db.apps.push(app);

@@ -10,6 +10,9 @@ export type AppStatus = (typeof APP_STATUSES)[number];
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
+export const HOSTINGS = ["on-prem", "cloud", "saas", "desktop", ""] as const;
+export type Hosting = (typeof HOSTINGS)[number];
+
 export const DOC_KINDS = ["overview", "manual", "technical", "faq", "other"] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
 
@@ -63,6 +66,12 @@ export interface App {
   version: string;
   cover: string;
   coverShotId: string | null;
+  /** Licence / landscape fields */
+  seats: number; // licensed seats (0 = not tracked)
+  activeUsersManual: number; // active users entered by hand (used when no tracked usage)
+  hosting: Hosting;
+  source: "in-house" | "vendor";
+  vendor: string;
   tone: Tone;
   startDate: string;
   goLiveDate: string;
@@ -256,6 +265,8 @@ export interface AppSummary extends App {
   docCount: number;
   coverShot: CoverShot;
   shotCount: number;
+  /** Landscape view: who is really using it vs. licensed seats */
+  landscape: { activeUsers: number; activeSource: "tracked" | "manual" | "logged" | "none"; utilization: number | null };
 }
 
 export interface AppDetail extends AppSummary {

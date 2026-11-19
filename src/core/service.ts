@@ -4,10 +4,11 @@ import type {
   LiveUsage, Access, App, AppDetail, AppStatus, AppSummary, Attachment, AttachmentMeta, Change, CoverShot, Screenshot, ScreenshotMeta, DashboardStats, DB, Doc, DocKind,
   ImportResult, Launch, LogEntry, Paged, Priority, Role, Task, TaskGroup, Tone, UsageEntry, UsageSummary, User, UserRecord,
 } from "./types";
-import { APP_STATUSES, DOC_KINDS, PRIORITIES } from "./types";
+import { APP_STATUSES, DOC_KINDS, HOSTINGS, PRIORITIES } from "./types";
 import { hashPassword, newSalt, newToken, verifyPassword } from "./crypto";
 import { addDays, normalizeDate, nowIso, splitList, toBool, toNumber, uid, ymd } from "./util";
 import { emptyDb, freshDb, sampleDb } from "./seed";
+import { LANDSCAPE } from "./landscape";
 
 export interface Store {
   load(): Promise<DB | null>;
@@ -39,7 +40,7 @@ const MAX_ATTACHMENT = 8 * 1024 * 1024;
 const USER_EDITABLE = ["name", "email", "title", "department", "bio", "avatar", "tone"] as const;
 const APP_FIELDS = [
   "name", "code", "tagline", "description", "category", "department", "status", "priority", "url", "environments",
-  "techStack", "ownerId", "version", "cover", "tone", "startDate", "goLiveDate",
+  "techStack", "ownerId", "version", "cover", "tone", "startDate", "goLiveDate", "seats", "activeUsersManual", "hosting", "source", "vendor",
 ] as const;
 
 function publicUser(u: UserRecord): User {
@@ -105,6 +106,11 @@ export class Service {
     for (const t of out.tasks) if (t.assignee) t.assignee = this.assigneeName(t.assignee, out.users);
     for (const a of out.apps) {
       if (a.coverShotId === undefined) a.coverShotId = null;
+      if (a.seats === undefined) a.seats = 0;
+      if (a.activeUsersManual === undefined) a.activeUsersManual = 0;
+      if (a.hosting === undefined) a.hosting = "on-prem"; // existing apps were all built in-house and hosted on the LAN
+      if (a.source === undefined) a.source = "in-house";
+      if (a.vendor === undefined) a.vendor = "";
       delete (a as { repoUrl?: string }).repoUrl; // repository links are no longer kept
     }
     return out;
@@ -230,6 +236,7 @@ export class Service {
       ownerName: owner?.name ?? "",
       docCount: this.db.docs.filter((d) => d.appId === app.id).length,
       coverShot: this.coverShot(app),
+      landscape: this.landscapeOf(app),
       shotCount: this.db.screenshots.filter((x) => x.appId === app.id).length,
     };
   }
@@ -246,6 +253,20 @@ export class Service {
     };
     const list = (Array.isArray(raw) ? raw.map(String) : String(raw ?? "").split(/[,;|]/)).map(one).filter(Boolean);
     return [...new Set(list)].join(", ").slice(0, 400);
+  }
+
+  /** Active users for licence utilization: tracker data (peak day, last 30 days) first, then the figure typed on the app, then logged usage. */
+  private landscapeOf(app: App): AppSummary["landscape"] {
+    const from = addDays(ymd(), -29);
+    let tracked = 0, logged = 0;
+    for (const u of this.db.usage) {
+      if (u.appId !== app.id || u.date < from) continue;
+      if (u.source === "auto") tracked = Math.max(tracked, u.activeUsers);
+      else logged = Math.max(logged, u.activeUsers);
+    }
+    const activeUsers = tracked || app.activeUsersManual || logged;
+    const activeSource = tracked ? "tracked" : app.activeUsersManual ? "manual" : logged ? "logged" : "none";
+    return { activeUsers, activeSource, utilization: app.seats && activeUsers ? Math.round((activeUsers / app.seats) * 100) : app.seats ? 0 : null };
   }
 
   private coverShot(app: App): CoverShot {
@@ -1020,6 +1041,33 @@ export class Service {
       return { apps: this.db.apps.length, users: this.db.users.length };
     }, { write: true });
 
+    this.on("admin.loadLandscape", (ctx) => {
+      this.admin(ctx);
+      let created = 0, updated = 0;
+      for (const item of LANDSCAPE) {
+        const keys = [item.name, ...(item.aliases ?? [])].map((k) => k.toLowerCase());
+        // vendor entries match by exact name only, so "VendorGlobe" never lands on the in-house "VendorGlobe API Sync"
+        const existing = this.db.apps.find((a) => keys.includes(a.name.toLowerCase()) || (item.inHouse && keys.includes(a.code.toLowerCase())));
+        if (existing) {
+          existing.seats = item.seats;
+          if (!existing.activeUsersManual) existing.activeUsersManual = item.active;
+          if (!existing.category || existing.category === "Internal tool") existing.category = item.category;
+          if (!existing.hosting && item.hosting) existing.hosting = item.hosting;
+          this.touch(existing);
+          updated++;
+        } else {
+          const app = this.buildApp(ctx, {
+            name: item.name, category: item.category, status: "live", seats: item.seats, activeUsersManual: item.active, hosting: item.hosting ?? "",
+            source: item.inHouse ? "in-house" : "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium",
+          });
+          this.db.apps.push(app);
+          created++;
+        }
+      }
+      this.log(ctx, "import", "app", null, null, `Loaded the application landscape: ${created} added, ${updated} updated (seats / active users)`);
+      return { created, updated };
+    }, { write: true });
+
     this.on("admin.clearUsage", (ctx) => {
       this.admin(ctx);
       const before = this.db.usage.length;
@@ -1061,6 +1109,11 @@ export class Service {
     if (row.techStack) out.techStack = splitList(row.techStack);
     if (row.startDate) out.startDate = row.startDate;
     if (row.goLiveDate) out.goLiveDate = row.goLiveDate;
+    if (row.seats !== undefined && row.seats !== "") out.seats = row.seats;
+    if (row.activeUsers !== undefined && row.activeUsers !== "") out.activeUsersManual = row.activeUsers;
+    if (row.hosting) out.hosting = row.hosting;
+    if (row.vendor) { out.vendor = row.vendor; out.source = "vendor"; }
+    if (row.source) out.source = row.source;
     if (row.owner) {
       const key = String(row.owner).toLowerCase().trim();
       const owner = this.db.users.find((u) => u.name.toLowerCase() === key || u.username === key || u.email.toLowerCase() === key);
@@ -1082,6 +1135,11 @@ export class Service {
     if ("techStack" in p) set("techStack", splitList(p.techStack).slice(0, 20));
     if ("ownerId" in p) set("ownerId", this.db.users.some((u) => u.id === p.ownerId) ? p.ownerId : null);
     if ("cover" in p) set("cover", String(p.cover ?? "").slice(0, 3_000_000));
+    if ("seats" in p) set("seats", Math.max(0, Math.round(toNumber(p.seats))));
+    if ("activeUsersManual" in p) set("activeUsersManual", Math.max(0, Math.round(toNumber(p.activeUsersManual))));
+    if ("hosting" in p) { const h = normHosting(p.hosting); if (h !== null) set("hosting", h); }
+    if ("source" in p) set("source", String(p.source).toLowerCase().startsWith("v") || String(p.source).toLowerCase().includes("third") ? "vendor" : "in-house");
+    if ("vendor" in p) set("vendor", clean(p.vendor, 80));
     if ("tone" in p) set("tone", (Math.min(5, Math.max(1, Number(p.tone) || 1)) as Tone));
     for (const k of ["startDate", "goLiveDate"] as const) if (k in p) set(k, normalizeDate(p[k]));
     void partial;
@@ -1091,7 +1149,7 @@ export class Service {
     const now = nowIso();
     const app: App = {
       id: uid(), name: "", code: "", tagline: "", description: "", category: "Internal tool", department: "", status: "planning", priority: "medium",
-      url: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, tone: ((this.db.apps.length % 5) + 1) as Tone,
+      url: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "", source: "in-house", vendor: "", tone: ((this.db.apps.length % 5) + 1) as Tone,
       startDate: ymd(), goLiveDate: "", visibility: "public", acl: {}, createdAt: now, updatedAt: now, createdBy: ctx.user.id,
     };
     this.applyAppFields(app, p);
@@ -1145,6 +1203,16 @@ export class Service {
     this.db.usage.push(entry);
     return { entry, created: true };
   }
+}
+
+function normHosting(v: unknown): App["hosting"] | null {
+  const s = String(v ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  if (!s) return "";
+  if (s.startsWith("onprem") || s === "onpremise" || s === "lan" || s === "local" || s === "server") return "on-prem";
+  if (s === "saas") return "saas";
+  if (s.startsWith("cloud") || s === "azure" || s === "aws") return "cloud";
+  if (s.startsWith("desktop") || s === "installed") return "desktop";
+  return (HOSTINGS as readonly string[]).includes(s) ? (s as App["hosting"]) : null;
 }
 
 function normalizeUrl(value: unknown) {

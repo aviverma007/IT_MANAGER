@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion } from "motion/react";
-import { Database, Download, FileSpreadsheet, ImagePlus, KeyRound, Moon, Palette, RotateCcw, Save, Server, Sun, Trash2, Upload, User as UserIcon } from "lucide-react";
+import { Boxes, Database, Download, FileSpreadsheet, ImagePlus, KeyRound, Moon, Palette, RotateCcw, Save, Server, Sun, Trash2, Upload, User as UserIcon } from "lucide-react";
 import { useAuth, useMe } from "@/lib/auth";
 import { useRun } from "@/api/hooks";
 import { call, DEMO } from "@/api/client";
@@ -116,12 +116,13 @@ export default function SettingsPage() {
       {me.role === "admin" && (
         <GlassCard className="p-6">
           <SectionTitle title="Data" icon={<Database />} sub={DEMO ? "Demo build — everything is stored in this browser's local storage." : "Stored by the server in server/data/db.json (a .bak copy is kept on every start)."} />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {[
               { icon: Download, title: "Download backup", text: "Everything as one JSON file — apps, tasks, usage, docs, files, users, logs.", action: <Button variant="primary" onClick={backup}><Download />Backup</Button> },
               { icon: Upload, title: "Restore backup", text: "Replace all data with a backup file. You stay signed in.", action: <><Button variant="secondary" onClick={() => restoreRef.current?.click()}><Upload />Restore…</Button><input ref={restoreRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void restore(f); e.target.value = ""; }} /></> },
               { icon: RotateCcw, title: "Reload sample data", text: "Replace everything with the sample portfolio (handy for demos).", action: <Button variant="secondary" onClick={async () => { if (await confirm({ title: "Reload sample data?", message: "All current applications and logs are replaced.", confirm: "Reload", danger: true })) { await run("admin.reset", { mode: "sample" }, { success: "Sample data loaded" }); await refresh(); } }}><RotateCcw />Reload</Button> },
               { icon: RotateCcw, title: "Clear sample usage", text: "Delete the made-up / manual usage numbers and launch counts. Real data from the tracking script is kept.", action: <Button variant="secondary" onClick={async () => { if (await confirm({ title: "Clear sample usage?", message: "Removes every usage entry that wasn't recorded by the tracking script.", confirm: "Clear usage", danger: true })) await run("admin.clearUsage", {}, { success: "Sample usage cleared" }); }}><RotateCcw />Clear usage</Button> },
+              { icon: Boxes, title: "Load app landscape", text: "Add the 47 apps from the Smartworld landscape sheet (SAP, Salesforce, M365…) with sample seat figures, and fill seats on matching in-house apps.", action: <Button variant="secondary" onClick={async () => { if (await confirm({ title: "Load the Smartworld app landscape?", message: "Adds vendor apps and fills licensed seats on matching apps. Existing data is kept. Seat/user figures are illustrative — correct them per app.", confirm: "Load landscape" })) await run("admin.loadLandscape", {}, { success: "Landscape loaded" }); }}><Boxes />Load</Button> },
               { icon: Trash2, title: "Start fresh", text: "Delete all applications, tasks, usage and logs. Users are kept.", action: <Button variant="danger" onClick={async () => { if (await confirm({ title: "Delete all applications?", message: "Users stay. Everything else is removed. Download a backup first if unsure.", confirm: "Delete everything", danger: true })) await run("admin.reset", { mode: "empty" }, { success: "All application data cleared" }); }}><Trash2 />Clear data</Button> },
             ].map((c) => (
               <div key={c.title} className="deboss flex flex-col gap-3 rounded-2xl p-4">

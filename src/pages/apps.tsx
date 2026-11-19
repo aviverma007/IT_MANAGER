@@ -20,6 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn, fmtDate, fmtNumber, STATUS_HEX, STATUS_META, toneHex } from "@/lib/utils";
 import { openApp } from "@/lib/launch";
+import { Landscape } from "@/components/app/landscape";
 
 type View = "grid" | "list" | "board";
 type Sort = "updated" | "name" | "progress" | "usage" | "golive";
@@ -205,7 +206,7 @@ export default function AppsPage() {
     const rows = list.map((a) => ({
       Name: a.name, Code: a.code, Status: STATUS_META[a.status].label, Progress: `${a.progress}%`, "Tasks done": a.tasksDone, "Tasks total": a.tasksTotal, Category: a.category, Department: a.department,
       Owner: a.ownerName, Version: a.version, Link: a.url, "Tech stack": a.techStack.join(", "), "Sessions (30d)": a.usage.sessions30, "Active users": a.usage.activeUsers,
-      "Launches (30d)": a.usage.launches30, "Start date": a.startDate, "Go-live date": a.goLiveDate, Priority: a.priority, Visibility: a.visibility,
+      "Launches (30d)": a.usage.launches30, Hosting: a.hosting, Source: a.source, Vendor: a.vendor, "Licensed seats": a.seats, "Active users (landscape)": a.landscape.activeUsers, "Utilization": a.landscape.utilization === null ? "" : `${a.landscape.utilization}%`, "Start date": a.startDate, "Go-live date": a.goLiveDate, Priority: a.priority, Visibility: a.visibility,
     }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Applications");
@@ -226,6 +227,8 @@ export default function AppsPage() {
           {me.role !== "viewer" && <Button variant="primary" onClick={() => setCreating(true)}><Plus />New</Button>}
         </div>
       </div>
+
+      <Landscape apps={list} allApps={apps ?? []} />
 
       <div className="glass flex flex-wrap items-center gap-3 rounded-3xl p-3">
         <div className="relative min-w-56 flex-1">

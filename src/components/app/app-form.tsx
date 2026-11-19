@@ -17,12 +17,13 @@ type Form = {
   name: string; code: string; tagline: string; description: string; category: string; department: string; status: string; priority: string;
   url: string; environments: EnvLink[]; techStack: string; ownerId: string; version: string; startDate: string; goLiveDate: string;
   tone: Tone; cover: string; visibility: "public" | "restricted"; withTemplate: boolean;
+  hosting: string; source: "in-house" | "vendor"; vendor: string; seats: string; activeUsersManual: string;
 };
 
 const blank = (): Form => ({
   name: "", code: "", tagline: "", description: "", category: "", department: "", status: "planning", priority: "medium", url: "",
   environments: [], techStack: "", ownerId: "", version: "", startDate: new Date().toISOString().slice(0, 10), goLiveDate: "", tone: 1, cover: "",
-  visibility: "public", withTemplate: true,
+  visibility: "public", withTemplate: true, hosting: "", source: "in-house", vendor: "", seats: "", activeUsersManual: "",
 });
 
 function fromApp(a: AppSummary): Form {
@@ -30,6 +31,7 @@ function fromApp(a: AppSummary): Form {
     name: a.name, code: a.code, tagline: a.tagline, description: a.description, category: a.category, department: a.department, status: a.status,
     priority: a.priority, url: a.url, environments: a.environments, techStack: a.techStack.join(", "), ownerId: a.ownerId ?? "",
     version: a.version, startDate: a.startDate, goLiveDate: a.goLiveDate, tone: a.tone, cover: a.cover, visibility: a.visibility, withTemplate: false,
+    hosting: a.hosting, source: a.source, vendor: a.vendor, seats: a.seats ? String(a.seats) : "", activeUsersManual: a.activeUsersManual ? String(a.activeUsersManual) : "",
   };
 }
 
@@ -51,7 +53,7 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
   async function save() {
     if (!form.name.trim()) { setTab("basics"); toast.error("Give the application a name."); return; }
     setBusy(true);
-    const payload = { ...form, ownerId: form.ownerId || null, environments: form.environments.filter((e) => e.url.trim()) };
+    const payload = { ...form, ownerId: form.ownerId || null, environments: form.environments.filter((e) => e.url.trim()), seats: Number(form.seats) || 0, activeUsersManual: Number(form.activeUsersManual) || 0, vendor: form.source === "vendor" ? form.vendor : "" };
     const res = app
       ? await run<AppSummary>("apps.update", { id: app.id, ...payload }, { success: "Application updated" })
       : await run<AppSummary>("apps.create", payload, { success: `${form.name} added` });
@@ -101,6 +103,21 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
               <Input list="itm-departments" value={form.department} onChange={(e) => set("department", e.target.value)} placeholder="Accounts" />
               <datalist id="itm-departments">{departments.map((c) => <option key={c} value={c} />)}</datalist>
             </Field>
+            <Field label="Hosting">
+              <Select value={form.hosting} onChange={(e) => set("hosting", e.target.value)}>
+                <option value="">— Not set —</option><option value="on-prem">On-premises</option><option value="cloud">Cloud</option><option value="saas">SaaS</option><option value="desktop">Desktop</option>
+              </Select>
+            </Field>
+            <Field label="Built by">
+              <div className="flex gap-2">
+                <Select className="w-36 shrink-0" value={form.source} onChange={(e) => set("source", e.target.value as Form["source"])}><option value="in-house">In-house</option><option value="vendor">Vendor</option></Select>
+                {form.source === "vendor" && <Input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} placeholder="Vendor (e.g. SAP)" />}
+              </div>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Licensed seats" hint="For utilization"><Input type="number" min={0} value={form.seats} onChange={(e) => set("seats", e.target.value)} placeholder="0" /></Field>
+              <Field label="Active users" hint="Used when not tracked"><Input type="number" min={0} value={form.activeUsersManual} onChange={(e) => set("activeUsersManual", e.target.value)} placeholder="0" /></Field>
+            </div>
             <Field label="Owner">
               <Select value={form.ownerId} onChange={(e) => set("ownerId", e.target.value)}>
                 <option value="">— No owner —</option>

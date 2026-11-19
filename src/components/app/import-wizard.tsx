@@ -30,6 +30,11 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: "priority", label: "Priority", synonyms: ["priority", "criticality", "importance"] },
     { key: "startDate", label: "Start date", synonyms: ["start date", "start", "started", "kickoff"] },
     { key: "goLiveDate", label: "Go-live date", synonyms: ["go live", "go-live", "go live date", "golive", "launch date", "live date"] },
+    { key: "seats", label: "Licensed seats", synonyms: ["seats", "licensed seats", "licenses", "licences", "license count", "licence count", "users licensed"] },
+    { key: "activeUsers", label: "Active users", synonyms: ["active users", "active", "users", "active user count"] },
+    { key: "hosting", label: "Hosting", synonyms: ["hosting", "deployment", "on-prem / cloud", "on prem", "cloud", "environment"] },
+    { key: "vendor", label: "Vendor", synonyms: ["vendor", "provider", "publisher", "supplier"] },
+    { key: "source", label: "In-house / vendor", synonyms: ["source", "built by", "in-house", "inhouse", "ownership"] },
   ],
   tasks: [
     { key: "group", label: "Heading / section", synonyms: ["heading", "group", "section", "phase", "stage", "module", "milestone", "category"] },
