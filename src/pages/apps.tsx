@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import * as XLSX from "xlsx";
 import {
-  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users2,
+  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users2, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { useApps, useRun } from "@/api/hooks";
 import { useMe } from "@/lib/auth";
@@ -121,49 +121,70 @@ function AppRow({ app, index }: { app: AppSummary; index: number }) {
 }
 
 function Board({ apps }: { apps: AppSummary[] }) {
-  const run = useRun();
-  const [over, setOver] = React.useState<AppStatus | null>(null);
   const columns = APP_STATUSES.filter((s) => s !== "retired" || apps.some((a) => a.status === "retired"));
+  const [over, setOver] = React.useState<AppStatus | null>(null);
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
-      {columns.map((status) => {
-        const list = apps.filter((a) => a.status === status);
-        return (
-          <div key={status}
-            onDragOver={(e) => { e.preventDefault(); setOver(status); }}
-            onDragLeave={() => setOver(null)}
-            onDrop={(e) => {
-              e.preventDefault(); setOver(null);
-              const id = e.dataTransfer.getData("text/app");
-              const app = apps.find((a) => a.id === id);
-              if (app && app.status !== status) void run("apps.update", { id, status }, { success: `${app.name} → ${STATUS_META[status].label}` });
-            }}
-            className={cn("glass flex w-72 shrink-0 flex-col rounded-3xl p-3 transition-all", over === status && "scale-[1.02] ring-2 ring-primary")}>
-            <div className="mb-3 flex items-center justify-between px-2">
-              <span className="flex items-center gap-2 text-sm font-semibold"><span className="size-2.5 rounded-full" style={{ background: STATUS_HEX[status], boxShadow: `0 0 10px ${STATUS_HEX[status]}` }} />{STATUS_META[status].label}</span>
-              <span className="rounded-full bg-muted px-2 text-xs tabular-nums">{list.length}</span>
-            </div>
-            <div className="flex min-h-24 flex-col gap-2">
-              <AnimatePresence>
-                {list.map((a) => (
-                  <motion.div key={a.id} layout layoutId={`board-${a.id}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}>
-                    <Link to={`/apps/${a.id}`} draggable={a.permission === "edit"} onDragStart={(e) => e.dataTransfer.setData("text/app", a.id)}
-                      className="emboss block cursor-grab rounded-2xl border border-border p-3 active:cursor-grabbing">
-                      <div className="flex items-center gap-2.5">
-                        <img src={coverFor(a, 80, 80)} alt="" className="h-8 w-12 rounded-md border border-border object-cover object-top" />
-                        <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{a.name}</div><div className="truncate text-[11px] text-muted-foreground">{a.ownerName || a.department}</div></div>
-                      </div>
-                      <div className="mt-2.5 flex items-center gap-2"><ProgressBar value={a.progress} color={toneHex(a.tone)} className="h-1.5" /><span className="text-[11px] tabular-nums text-muted-foreground">{a.progress}%</span></div>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5"><UsersUsage app={a} compact /><TicketBadge app={a} compact /></div>
-                    </Link>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-              {list.length === 0 && <div className="grid flex-1 place-items-center rounded-2xl border border-dashed border-border py-6 text-xs text-muted-foreground">Drop here</div>}
-            </div>
-          </div>
-        );
-      })}
+      {columns.map((status) => <BoardColumn key={status} status={status} apps={apps} list={apps.filter((a) => a.status === status)} over={over === status} setOver={setOver} />)}
+    </div>
+  );
+}
+
+/** One status column. Long columns scroll inside themselves (fixed height) with ▲ ▼ buttons. */
+function BoardColumn({ status, apps, list, over, setOver }: { status: AppStatus; apps: AppSummary[]; list: AppSummary[]; over: boolean; setOver: (s: AppStatus | null) => void }) {
+  const run = useRun();
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = React.useState({ up: false, down: false });
+  const measure = React.useCallback(() => {
+    const el = ref.current;
+    if (el) setEdge({ up: el.scrollTop > 4, down: el.scrollTop + el.clientHeight < el.scrollHeight - 4 });
+  }, []);
+  React.useEffect(() => { measure(); }, [list.length, measure]);
+  React.useEffect(() => { window.addEventListener("resize", measure); return () => window.removeEventListener("resize", measure); }, [measure]);
+  const step = (dir: number) => ref.current?.scrollBy({ top: dir * ref.current.clientHeight * 0.8, behavior: "smooth" });
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setOver(status); }}
+      onDragLeave={() => setOver(null)}
+      onDrop={(e) => {
+        e.preventDefault(); setOver(null);
+        const id = e.dataTransfer.getData("text/app");
+        const app = apps.find((a) => a.id === id);
+        if (app && app.status !== status) void run("apps.update", { id, status }, { success: `${app.name} → ${STATUS_META[status].label}` });
+      }}
+      className={cn("glass flex max-h-[calc(100vh-15rem)] min-h-64 w-72 shrink-0 flex-col rounded-3xl p-3 transition-all", over && "scale-[1.02] ring-2 ring-primary")}>
+      <div className="mb-2 flex items-center justify-between gap-2 px-2">
+        <span className="flex items-center gap-2 text-sm font-semibold"><span className="size-2.5 rounded-full" style={{ background: STATUS_HEX[status], boxShadow: `0 0 10px ${STATUS_HEX[status]}` }} />{STATUS_META[status].label}</span>
+        <span className="flex items-center gap-1">
+          {(edge.up || edge.down) && <>
+            <button onClick={() => step(-1)} disabled={!edge.up} aria-label="Scroll up" className="emboss grid size-6 place-items-center rounded-full disabled:opacity-30"><ChevronUp className="size-3.5" /></button>
+            <button onClick={() => step(1)} disabled={!edge.down} aria-label="Scroll down" className="emboss grid size-6 place-items-center rounded-full disabled:opacity-30"><ChevronDown className="size-3.5" /></button>
+          </>}
+          <span className="rounded-full bg-muted px-2 text-xs tabular-nums">{list.length}</span>
+        </span>
+      </div>
+      <div className="relative min-h-0 flex-1">
+        <div ref={ref} onScroll={measure} className="flex h-full max-h-full flex-col gap-2 overflow-y-auto overscroll-contain px-0.5 pb-1 [scrollbar-width:thin]">
+          <AnimatePresence>
+            {list.map((a) => (
+              <motion.div key={a.id} layout layoutId={`board-${a.id}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="shrink-0">
+                <Link to={`/apps/${a.id}`} draggable={a.permission === "edit"} onDragStart={(e) => e.dataTransfer.setData("text/app", a.id)}
+                  className="emboss block cursor-grab rounded-2xl border border-border p-3 active:cursor-grabbing">
+                  <div className="flex items-center gap-2.5">
+                    <img src={coverFor(a, 80, 80)} alt="" className="h-8 w-12 rounded-md border border-border object-cover object-top" />
+                    <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{a.name}</div><div className="truncate text-[11px] text-muted-foreground">{a.vendor || a.ownerName || a.department}</div></div>
+                  </div>
+                  {a.tasksTotal > 0 && <div className="mt-2.5 flex items-center gap-2"><ProgressBar value={a.progress} color={toneHex(a.tone)} className="h-1.5" /><span className="text-[11px] tabular-nums text-muted-foreground">{a.progress}%</span></div>}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5"><UsersUsage app={a} compact /><TicketBadge app={a} compact /></div>
+                </Link>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {list.length === 0 && <div className="grid flex-1 place-items-center rounded-2xl border border-dashed border-border py-6 text-xs text-muted-foreground">Drop here</div>}
+        </div>
+        {edge.up && <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-6 rounded-t-2xl bg-gradient-to-b from-[var(--background)]/70 to-transparent" />}
+        {edge.down && <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-b-2xl bg-gradient-to-t from-[var(--background)]/70 to-transparent" />}
+      </div>
     </div>
   );
 }
