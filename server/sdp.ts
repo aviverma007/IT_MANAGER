@@ -52,14 +52,14 @@ function toTicket(r: any): Ticket {
   };
 }
 
-const FIELDS = ["subject", "status", "priority", "category", "subcategory", "item", "group", "site", "requester", "technician", "created_time", "due_by_time", "resolved_time", "completed_time"];
+const FIELDS = ["display_id", "subject", "status", "priority", "category", "subcategory", "item", "group", "site", "requester", "technician", "created_time", "due_by_time", "resolved_time", "completed_time"];
 
 /** Newest-first walk over requests until older than SDP_SYNC_DAYS (or `pages` pages). Fills category/priority from
  *  request details when the list view leaves them out (capped by SDP_DETAIL_LIMIT per run). */
 export async function fetchTickets(opts: { pages?: number; known?: Map<string, Ticket> } = {}) {
   const days = Number(env("SDP_SYNC_DAYS", "365")) || 365;
   const stopAt = new Date(Date.now() - days * 864e5).toISOString();
-  const maxPages = opts.pages ?? 100;
+  const maxPages = opts.pages ?? (Number(env("SDP_MAX_PAGES", "400")) || 400);
   const out: Ticket[] = [];
   let total = 0;
   let withFields = true;
@@ -79,9 +79,9 @@ export async function fetchTickets(opts: { pages?: number; known?: Map<string, T
   let budget = Number(env("SDP_DETAIL_LIMIT", "150")) || 0;
   for (const t of out) {
     if (budget <= 0) break;
-    if (t.category || t.priority) continue;
+    if (t.category || !t.open) continue; // details only for open tickets the list left without a category
     const prev = opts.known?.get(t.id);
-    if (prev && (prev.category || prev.priority)) { t.category = prev.category; t.subcategory = prev.subcategory; t.item = prev.item; t.priority = prev.priority; t.group ||= prev.group; continue; }
+    if (prev && prev.category) { t.category = prev.category; t.subcategory = prev.subcategory; t.item = prev.item; t.priority = prev.priority; t.group ||= prev.group; continue; }
     budget--;
     try {
       const d = (await sdpGet(`requests/${t.id}`)).request;

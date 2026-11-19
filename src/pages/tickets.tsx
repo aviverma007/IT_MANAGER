@@ -5,7 +5,7 @@ import { Ticket as TicketIcon } from "lucide-react";
 import { useApps } from "@/api/hooks";
 import { useMe } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/bits";
-import { RulesPanel, SyncBar, TicketImportButton, TicketKpis, TicketTable, useTickets, useTicketStatus } from "@/components/app/tickets";
+import { RulesPanel, SuggestPanel, SyncBar, TicketImportButton, TicketKpis, TicketTable, useTickets, useTicketStatus } from "@/components/app/tickets";
 import { fmtNumber, toneHex } from "@/lib/utils";
 
 export default function TicketsPage() {
@@ -58,6 +58,7 @@ export default function TicketsPage() {
             </div>
           </div>
 
+          <SuggestPanel apps={apps ?? []} />
           <TicketTable rows={rows} apps={apps ?? []} />
           {status && me.role === "admin" && <RulesPanel status={status} apps={apps ?? []} />}
         </>

@@ -446,3 +446,39 @@ export function TicketsOverview({ apps }: { apps: AppSummary[] }) {
     </section>
   );
 }
+
+/** Admin/editor: the most common words in unmatched ticket subjects — pick an app and every ticket with that word is tagged (as a rule). */
+export function SuggestPanel({ apps }: { apps: AppSummary[] }) {
+  const me = useMe();
+  const run = useRun();
+  const { data, isLoading } = useQuery({ queryKey: ["tickets-suggest"], queryFn: () => call<{ unmatched: number; terms: { term: string; n: number; open: number; examples: string[] }[] }>("tickets.suggest") });
+  const [show, setShow] = React.useState(24);
+  if (me.role !== "admin" || isLoading || !data || !data.terms.length) return null;
+  async function tag(term: string, appId: string) {
+    if (!appId) return;
+    await run("tickets.rules.save", { field: "subject", contains: term, appId }, { success: `Tickets mentioning “${term}” → ${apps.find((a) => a.id === appId)?.name}` });
+  }
+  return (
+    <div className="glass flex flex-col gap-3 rounded-3xl p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Wand2 className="size-4 text-primary" /><h3 className="font-semibold">Tag unmatched tickets fast</h3>
+        <span className="text-xs text-muted-foreground">{fmtNumber(data.unmatched)} unmatched · the words that come up most in their subjects. Pick an app next to a word and every ticket with that word (now and later) is tagged to it.</span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {data.terms.slice(0, show).map((t) => (
+          <div key={t.term} className="deboss flex items-center gap-2 rounded-xl px-3 py-2" title={t.examples.join("\n")}>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">“{t.term}”</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{fmtNumber(t.n)} tickets{t.open ? ` · ${t.open} open` : ""} · e.g. {t.examples[0]}</span>
+            </span>
+            <Select className="h-8 w-40 shrink-0 text-xs" value="" onChange={(e) => void tag(t.term, e.target.value)}>
+              <option value="">Tag to…</option>
+              {apps.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </div>
+        ))}
+      </div>
+      {data.terms.length > show && <Button variant="ghost" size="sm" onClick={() => setShow((n) => n + 24)}>Show more words</Button>}
+    </div>
+  );
+}

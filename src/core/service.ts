@@ -96,7 +96,16 @@ export class Service {
 
   async init() {
     const loaded = await this.store.load();
-    if (loaded && loaded.users?.length) this.db = this.migrate(loaded);
+    if (loaded && loaded.users?.length) {
+      this.db = this.migrate(loaded);
+      // one-time: bring in the vendor apps from the Smartworld landscape if none exist yet
+      const admin = this.db.users.find((u) => u.role === "admin" && u.active);
+      if (admin && !this.db.apps.some((a) => a.source === "vendor") && !this.db.logs.some((l) => l.summary.startsWith("Loaded the application landscape"))) {
+        const r = this.loadLandscape({ user: admin });
+        console.log(`[landscape] added ${r.created} vendor apps, updated ${r.updated}`);
+        await this.persist();
+      }
+    }
     else {
       this.db = this.options.seed ? await sampleDb() : await freshDb();
       await this.persist();
@@ -398,6 +407,40 @@ export class Service {
   }
 
 
+
+  /** Adds the vendor apps from the Smartworld landscape and fills seats / ticket keywords on matching apps. Safe to re-run. */
+  loadLandscape(ctx: Ctx) {
+    let created = 0, updated = 0, skipped = 0;
+    const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    for (const item of LANDSCAPE) {
+      const keys = [item.name, ...(item.aliases ?? [])].map(norm);
+      // vendor entries match by name only, so "VendorGlobe" never lands on the in-house "VendorGlobe API Sync"
+      const existing = this.db.apps.find((a) => keys.includes(norm(a.name)) || (item.inHouse && keys.includes(norm(a.code))));
+      if (existing) {
+        if (!existing.seats) existing.seats = item.seats;
+        if (!existing.activeUsersManual) existing.activeUsersManual = item.active;
+        if (!existing.category || existing.category === "Internal tool") existing.category = item.category;
+        if (!existing.hosting && item.hosting) existing.hosting = item.hosting;
+        const have = new Set(existing.ticketKeywords.map((k) => k.toLowerCase()));
+        existing.ticketKeywords = [...existing.ticketKeywords, ...(item.keywords ?? []).filter((k) => !have.has(k.toLowerCase()))];
+        this.touch(existing);
+        updated++;
+      } else if (item.inHouse) {
+        skipped++; // your own apps are never created from the sheet — only matched ones get seat figures
+      } else {
+        const app = this.buildApp(ctx, {
+          name: item.name, category: item.category, status: "live", seats: item.seats, activeUsersManual: item.active, hosting: item.hosting ?? "",
+          source: "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium", ticketKeywords: item.keywords ?? [],
+        });
+        this.db.apps.push(app);
+        created++;
+      }
+    }
+    this.ticketIndex = null;
+    this.log(ctx, "import", "app", null, null, `Loaded the application landscape: ${created} vendor apps added, ${updated} updated`);
+    return { created, updated, skipped };
+  }
+
   /* ---------------------------------------------------- tickets ----------------------------------------------------- */
 
   /** ticket id → { appId, matchedBy }. Rebuilt lazily after any write or sync. */
@@ -418,12 +461,13 @@ export class Service {
     }
     terms.sort((x, y) => y.len - x.len); // most specific first
     const appIds = new Set(this.db.apps.map((a) => a.id));
+    // whole-word match, so a rule for "ITS" doesn't catch "kits"
+    const rules = this.db.ticketRules.filter((r) => appIds.has(r.appId)).map((r) => ({ ...r, re: new RegExp(`(^|[^a-z0-9])${esc(r.contains.trim()).replace(/\\? /g, "[\\s_-]*")}($|[^a-z0-9])`, "i") }));
     return (t: Ticket): { appId: string | null; matchedBy: TicketRow["matchedBy"] } => {
       if (t.overrideAppId && appIds.has(t.overrideAppId)) return { appId: t.overrideAppId, matchedBy: "manual" };
-      for (const r of this.db.ticketRules) {
-        if (!appIds.has(r.appId)) continue;
-        const v = String(t[r.field] ?? "").toLowerCase();
-        if (v && v.includes(r.contains.toLowerCase())) return { appId: r.appId, matchedBy: "rule" };
+      for (const r of rules) {
+        const v = String(t[r.field] ?? "");
+        if (v && r.re.test(v)) return { appId: r.appId, matchedBy: "rule" };
       }
       const text = [t.subject, t.category, t.subcategory, t.item].join(" | ");
       for (const term of terms) if (term.re.test(text)) return { appId: term.appId, matchedBy: "keyword" };
@@ -855,6 +899,33 @@ export class Service {
       sample: this.db.tickets.some((t) => t.id.startsWith("sample-")),
       canManage: ctx.user.role === "admin",
     }));
+    this.on("tickets.suggest", (ctx) => {
+      if (ctx.user.role === "viewer") throw new ApiError(403, "View-only users can't tag tickets.");
+      const idx = this.ticketMatches();
+      const STOP = new Set("re fw fwd fyi the and for with from to of in on at by is are was be it this that please kindly pls request requested requesting regarding reg need needed required require issue issues problem error not working unable cannot can't cant new access dear sir mam team hi hello help urgent asap update updated query support id ids user users system related same also via your our my all any one two get got give provide providing change changes create created creating add added remove removed done check checking pending approval approve approved".split(" "));
+      const counts = new Map<string, { n: number; open: number; examples: string[] }>();
+      let unmatched = 0;
+      for (const t of this.db.tickets) {
+        if (idx.get(t.id)?.appId) continue;
+        unmatched++;
+        const words = t.subject.toLowerCase().replace(/[^a-z0-9&+./ -]+/g, " ").split(/[\s/.-]+/).filter((w) => w.length >= 2 && !/^\d+$/.test(w));
+        const seen = new Set<string>();
+        for (let i = 0; i < words.length; i++) {
+          const w = words[i]!;
+          if (!STOP.has(w) && w.length >= 3) seen.add(w);
+          const n = words[i + 1];
+          if (n && !STOP.has(w) && !STOP.has(n)) seen.add(`${w} ${n}`);
+        }
+        for (const term of seen) {
+          const e = counts.get(term) ?? { n: 0, open: 0, examples: [] };
+          e.n++; if (t.open) e.open++;
+          if (e.examples.length < 3) e.examples.push(t.subject);
+          counts.set(term, e);
+        }
+      }
+      const terms = [...counts.entries()].filter(([, e]) => e.n >= 3).sort((a, b) => b[1].n - a[1].n).slice(0, 80).map(([term, e]) => ({ term, ...e }));
+      return { unmatched, terms };
+    });
     this.on("tickets.assign", (ctx, p: { ids: string[]; appId: string | null }) => {
       const target = p.appId ? this.app(ctx, p.appId, "edit") : null;
       if (!target && ctx.user.role === "viewer") throw new ApiError(403, "View-only users can't reassign tickets.");
@@ -1207,34 +1278,7 @@ export class Service {
 
     this.on("admin.loadLandscape", (ctx) => {
       this.admin(ctx);
-      let created = 0, updated = 0, skipped = 0;
-      const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
-      for (const item of LANDSCAPE) {
-        const keys = [item.name, ...(item.aliases ?? [])].map(norm);
-        // vendor entries match by name only, so "VendorGlobe" never lands on the in-house "VendorGlobe API Sync"
-        const existing = this.db.apps.find((a) => keys.includes(norm(a.name)) || (item.inHouse && keys.includes(norm(a.code))));
-        if (existing) {
-          existing.seats = item.seats;
-          if (!existing.activeUsersManual) existing.activeUsersManual = item.active;
-          if (!existing.category || existing.category === "Internal tool") existing.category = item.category;
-          if (!existing.hosting && item.hosting) existing.hosting = item.hosting;
-          const have = new Set(existing.ticketKeywords.map((k) => k.toLowerCase()));
-          existing.ticketKeywords = [...existing.ticketKeywords, ...(item.keywords ?? []).filter((k) => !have.has(k.toLowerCase()))];
-          this.touch(existing);
-          updated++;
-        } else if (item.inHouse) {
-          skipped++; // your own apps are never created from the sheet — only matched ones get seat figures
-        } else {
-          const app = this.buildApp(ctx, {
-            name: item.name, category: item.category, status: "live", seats: item.seats, activeUsersManual: item.active, hosting: item.hosting ?? "",
-            source: "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium", ticketKeywords: item.keywords ?? [],
-          });
-          this.db.apps.push(app);
-          created++;
-        }
-      }
-      this.log(ctx, "import", "app", null, null, `Loaded the application landscape: ${created} vendor apps added, ${updated} updated`);
-      return { created, updated, skipped };
+      return this.loadLandscape(ctx);
     }, { write: true });
 
     this.on("admin.clearUsage", (ctx) => {

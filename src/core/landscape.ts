@@ -97,5 +97,15 @@ const KEYWORDS: Record<string, string[]> = {
   Brevo: ["Sendinblue"],
   Engati: ["chatbot", "WhatsApp bot"],
   "Ma Foi": ["MaFoi"],
+  // in-house apps — merged into the existing entries
+  "MC Review": ["NFA", "MC review", "management committee"],
+  "Smart Leasing": ["leasing", "lease", "rent invoice", "CAM"],
+  "Cheque Register": ["cheque", "check register"],
+  "HR Pre-Onboarding": ["onboarding", "pre-onboarding", "careers portal", "referral"],
+  "Analytics Dashboard": ["sales dashboard", "leasing dashboard"],
+  "Document Flow": ["document flow", "doc flow"],
+  "QMS PR Sync": ["QMS"],
+  "PR/NFA API Sync": ["VendorGlobe API", "PR sync"],
+  "Complaint MIS": ["complaint", "MIS report"],
 };
 for (const item of LANDSCAPE) item.keywords = KEYWORDS[item.name] ?? [];
