@@ -8,6 +8,7 @@ import cors from "cors";
 import { ApiError, Service, type Store } from "../src/core/service.ts";
 import type { DB } from "../src/core/types.ts";
 import { fetchTickets, sdpConfigured } from "./sdp.ts";
+import { landscapeItemFor } from "../src/core/landscape.ts";
 
 // Optional .env next to package.json (ServiceDesk Plus keys etc.) — never committed.
 try { process.loadEnvFile(path.resolve(import.meta.dirname, "../.env")); } catch { /* no .env */ }
@@ -223,6 +224,7 @@ app.post("/api/apps.captureAll", async (req, res) => {
       }
     }));
     await service.persistNow();
+    (result as { logos?: number }).logos = await logoCovers().catch(() => 0);
     if (result.captured) service.emitChange({ method: "apps.captureAll", userId: user.id, userName: user.name, appId: null, summary: `Captured ${result.captured} screenshot(s)`, at: new Date().toISOString() });
     res.json(result);
   } catch (e) {
@@ -315,6 +317,55 @@ if (fs.existsSync(DIST)) {
   app.use((req, res, next) => (req.method === "GET" && !req.path.startsWith("/api") ? res.sendFile(path.join(DIST, "index.html")) : next()));
 }
 
+
+/* Logo covers: apps with no screenshot (desktop software like SAP GUI / Tally, or sign-in pages that block capture)
+   get a cover with the vendor's logo, fetched once on the server and stored with the app. */
+const TONES = ["#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#f43f5e"];
+const xml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
+function logoDomain(a: { name: string; url: string }) {
+  const li = landscapeItemFor(a.name);
+  if (li?.domain) return li.domain;
+  try {
+    const h = new URL(a.url).hostname;
+    if (/^(\d+\.){3}\d+$/.test(h) || h === "localhost" || !h.includes(".") || /\.(local|lan|internal)$/.test(h)) return "";
+    return h.replace(/^(www|app|login)\./, "");
+  } catch { return ""; }
+}
+async function logoCover(a: (typeof service.db.apps)[number]) {
+  const domain = logoDomain(a);
+  if (!domain) return false;
+  const r = await fetch(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=256`, { signal: AbortSignal.timeout(10_000) });
+  if (!r.ok) return false;
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length < 400) return false; // the generic globe
+  const type = r.headers.get("content-type") || "image/png";
+  const tone = TONES[((a.tone || 1) - 1) % 5]!;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${tone}" stop-opacity=".22"/><stop offset="1" stop-color="${tone}" stop-opacity=".06"/></linearGradient>
+<filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="${tone}" flood-opacity=".35"/></filter></defs>
+<rect width="1280" height="800" fill="#f8fafc"/><rect width="1280" height="800" fill="url(#g)"/>
+<circle cx="1120" cy="120" r="260" fill="${tone}" opacity=".10"/><circle cx="140" cy="720" r="200" fill="${tone}" opacity=".08"/>
+<rect x="490" y="170" width="300" height="300" rx="64" fill="#fff" filter="url(#s)"/>
+<image href="data:${type};base64,${buf.toString("base64")}" x="540" y="220" width="200" height="200" preserveAspectRatio="xMidYMid meet"/>
+<text x="640" y="580" text-anchor="middle" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="64" font-weight="700" fill="#0f172a">${xml(a.name)}</text>
+<text x="640" y="640" text-anchor="middle" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="30" fill="#64748b">${xml(a.vendor || a.category || "")}</text></svg>`;
+  a.cover = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  return true;
+}
+async function logoCovers() {
+  let n = 0;
+  for (const a of service.db.apps) {
+    if (a.cover || service.db.screenshots.some((x) => x.appId === a.id)) continue;
+    try { if (await logoCover(a)) n++; } catch { /* offline or blocked — keep the generated cover */ }
+  }
+  if (n) {
+    await service.persistNow();
+    service.emitChange({ method: "apps.captureAll", userId: "system", userName: "System", appId: null, summary: `Added ${n} logo cover(s)`, at: new Date().toISOString() });
+    console.log(`[capture] added ${n} logo cover(s)`);
+  }
+  return n;
+}
+
 /* Automatic capture: any app that has a link but no screenshot is captured shortly after start-up and
    retried every CAPTURE_RETRY_HOURS (apps that were down get picked up later). CAPTURE_ON_START=false turns it off. */
 async function captureMissing() {
@@ -340,7 +391,7 @@ async function captureMissing() {
   }
 }
 if (process.env.CAPTURE_ON_START !== "false") {
-  setTimeout(() => void captureMissing().catch((e) => console.log("[capture]", e.message)), 4000);
+  setTimeout(() => void captureMissing().catch((e) => console.log("[capture]", e.message)).finally(() => void logoCovers().catch(() => undefined)), 4000);
   const hours = Number(process.env.CAPTURE_RETRY_HOURS ?? 6);
   if (hours > 0) setInterval(() => void captureMissing().catch(() => undefined), hours * 3600e3).unref();
 }

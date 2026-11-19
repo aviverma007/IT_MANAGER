@@ -15,7 +15,7 @@ import { coverFor } from "@/lib/covers";
 import { cn, fmtDate, fmtNumber, STATUS_HEX, STATUS_META, toneHex } from "@/lib/utils";
 import { openApp } from "@/lib/launch";
 
-const FRAMES = ["black", "oak", "white"] as const;
+import type { AppSummary } from "@/core/types";
 
 
 function greeting() {
@@ -29,19 +29,23 @@ const item = { hidden: { opacity: 0, y: 24, scale: 0.97 }, show: { opacity: 1, y
 export default function DashboardPage() {
   const me = useMe();
   const navigate = useNavigate();
-  const openPeople = useOpenPeople();
   const { data: stats, isLoading } = useDashboard();
   const { data: apps } = useApps();
-  const [active, setActive] = React.useState<number | null>(null);
 
-  const wall = React.useMemo(() => {
-    const list = [...(apps ?? [])].sort((a, b) => Number(!!b.coverShot) - Number(!!a.coverShot) || Number(b.favorite) - Number(a.favorite) || b.usage.sessions30 - a.usage.sessions30 || b.progress - a.progress).slice(0, 8);
-    const prints: PictureRailItem[] = list.map((a, i) => ({
-      id: a.id, title: a.name, artist: a.ownerName || a.department, year: a.version ? `v${a.version}` : STATUS_META[a.status].label,
-      image: coverFor(a, 800, 1000), aspect: a.coverShot ? Math.min(1.9, Math.max(0.55, a.coverShot.width / a.coverShot.height)) : i % 3 === 1 ? 1 : 0.8, frame: FRAMES[i % 3], mat: i % 2 === 0, drop: [0.04, 0.12, -0.02, 0.16, 0.06, 0, 0.1, 0.03][i] ?? 0,
-      tag: `${a.progress}%`, details: [STATUS_META[a.status].label, a.category, `${a.tasksDone}/${a.tasksTotal} tasks done`, `${fmtNumber(a.usage.sessions30)} sessions · 30 days`],
-    }));
-    return { list, prints };
+  // Every application hangs on the wall, ordered by category and packed into rails of up to 9.
+  const rails = React.useMemo(() => {
+    const groups = new Map<string, AppSummary[]>();
+    for (const a of apps ?? []) groups.set(a.category || "Other", [...(groups.get(a.category || "Other") ?? []), a]);
+    const ordered = [...groups.entries()].sort((x, y) => Number(y[1].some((a) => a.favorite)) - Number(x[1].some((a) => a.favorite)) || y[1].length - x[1].length || x[0].localeCompare(y[0]));
+    const flat = ordered.flatMap(([, list]) => [...list].sort((a, b) => Number(!!b.coverShot) - Number(!!a.coverShot) || Number(b.favorite) - Number(a.favorite) || b.usage.sessions30 - a.usage.sessions30 || a.name.localeCompare(b.name)));
+    const per = Math.ceil(flat.length / Math.max(1, Math.ceil(flat.length / 9)));
+    const out: { key: string; title: string; list: AppSummary[] }[] = [];
+    for (let i = 0; i < flat.length; i += per) {
+      const list = flat.slice(i, i + per);
+      const cats = [...new Set(list.map((a) => a.category || "Other"))];
+      out.push({ key: String(i), title: cats.length > 3 ? `${cats.slice(0, 3).join(" · ")} +${cats.length - 3}` : cats.join(" · "), list });
+    }
+    return out;
   }, [apps]);
 
   const t = stats?.totals;
@@ -104,27 +108,14 @@ export default function DashboardPage() {
         )}
       </motion.div>
 
-      {/* App wall */}
-      {wall.prints.length > 0 && (
+      {/* App wall — every application, a rail per category */}
+      {rails.length > 0 && (
         <GlassCard className="overflow-hidden">
-          <PictureRailGallery
-            items={wall.prints}
-            eyebrow="App wall · your top applications"
-            heading="Brush the rail to light an app, click to lift it."
-            caption="Pinned and most-used applications hang here. Drag a frame to slide it along the rail."
-            autoplay
-            interval={3200}
-            onActiveChange={setActive}
-            className="!bg-transparent"
-            labels={{ front: "Front", back: "Back", close: "Close", open: "Click to lift" }}
-            action={
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button variant="primary" size="sm" disabled={active === null} onClick={() => active !== null && navigate(`/apps/${wall.list[active]!.id}`)}><ArrowRight />Open app page</Button>
-                <Button variant="secondary" size="sm" disabled={active === null} onClick={() => active !== null && openPeople(wall.list[active]!)}><UsersRound />Users</Button>
-                <Button variant="secondary" size="sm" disabled={active === null || !wall.list[active]?.url} onClick={() => active !== null && openApp(wall.list[active]!)}><ExternalLink />Launch</Button>
-              </div>
-            }
-          />
+          <div className="flex flex-col items-center gap-1 px-6 pt-7 text-center">
+            <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-muted-foreground">App wall · all {apps?.length ?? 0} applications</p>
+            <h2 className="text-balance text-2xl font-medium tracking-tight sm:text-3xl">Brush a rail to light an app, click to lift it.</h2>
+          </div>
+          {rails.map((r, i) => <WallRail key={r.key} title={r.title} list={r.list} first={i === 0} />)}
         </GlassCard>
       )}
 
@@ -238,6 +229,42 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const FRAME_CYCLE: PictureRailItem["frame"][] = ["black", "oak", "white"];
+function WallRail({ title, list, first }: { title: string; list: AppSummary[]; first: boolean }) {
+  const navigate = useNavigate();
+  const openPeople = useOpenPeople();
+  const [active, setActive] = React.useState<number | null>(null);
+  const prints: PictureRailItem[] = React.useMemo(() => list.map((a, i) => ({
+    id: a.id, title: a.name, artist: a.vendor || a.ownerName || a.department, year: a.version ? `v${a.version}` : STATUS_META[a.status].label,
+    image: coverFor(a, 800, 1000), aspect: a.coverShot ? Math.min(1.9, Math.max(0.55, a.coverShot.width / a.coverShot.height)) : a.cover ? 1.6 : i % 3 === 1 ? 1 : 0.8,
+    frame: FRAME_CYCLE[i % 3], mat: i % 2 === 0, drop: [0.04, 0.12, -0.02, 0.16, 0.06, 0, 0.1, 0.03][i] ?? 0,
+    tag: a.landscape.utilization !== null ? `${a.landscape.utilization}% seats` : a.tasksTotal ? `${a.progress}%` : STATUS_META[a.status].label,
+    details: [STATUS_META[a.status].label, a.category, `${fmtNumber(a.landscape.activeUsers)}${a.seats ? ` / ${fmtNumber(a.seats)}` : ""} users`, a.tickets?.open ? `${a.tickets.open} open tickets` : `${a.tasksDone}/${a.tasksTotal} tasks done`],
+  })), [list]);
+  const cur = active === null ? null : list[active];
+  return (
+    <div className="border-t border-border/40 first:border-t-0">
+      <PictureRailGallery
+        items={prints}
+        eyebrow={title}
+        autoplay={first}
+        interval={3200}
+        onActiveChange={setActive}
+        className="!bg-transparent"
+        caption=" "
+        labels={{ front: "Front", back: "Back", close: "Close", open: "Click to lift" }}
+        action={
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="primary" size="sm" disabled={!cur} onClick={() => cur && navigate(`/apps/${cur.id}`)}><ArrowRight />Open app page</Button>
+            <Button variant="secondary" size="sm" disabled={!cur} onClick={() => cur && openPeople(cur)}><UsersRound />Users</Button>
+            <Button variant="secondary" size="sm" disabled={!cur?.url} onClick={() => cur && openApp(cur)}><ExternalLink />Launch</Button>
+          </div>
+        }
+      />
     </div>
   );
 }

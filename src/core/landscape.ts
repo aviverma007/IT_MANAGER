@@ -16,6 +16,10 @@ export interface LandscapeItem {
   aliases?: string[];
   /** words in helpdesk tickets that mean this app */
   keywords?: string[];
+  /** public sign-in / home page (used for Launch and for the screenshot) */
+  url?: string;
+  /** vendor website, for the logo when there is no web page to capture */
+  domain?: string;
 }
 
 const L = (name: string, category: string, seats: number, active: number, hosting: Hosting = "", extra: Partial<LandscapeItem> = {}): LandscapeItem => ({ name, category, seats, active, hosting, ...extra });
@@ -109,3 +113,37 @@ const KEYWORDS: Record<string, string[]> = {
   "Complaint MIS": ["complaint", "MIS report"],
 };
 for (const item of LANDSCAPE) item.keywords = KEYWORDS[item.name] ?? [];
+
+/** Sign-in pages (only set when the app has no link yet) and logo domains. Unknown ones are left blank on purpose. */
+const LINKS: Record<string, [url: string, domain: string]> = {
+  SAP: ["", "sap.com"],
+  Tally: ["", "tallysolutions.com"],
+  "Tally TS Client": ["", "tallysolutions.com"],
+  Salesforce: ["https://login.salesforce.com", "salesforce.com"],
+  Knowlarity: ["https://www.knowlarity.com", "knowlarity.com"],
+  Engati: ["https://app.engati.com", "engati.com"],
+  Brevo: ["https://app.brevo.com", "brevo.com"],
+  Novade: ["https://www.novade.net", "novade.net"],
+  Visilean: ["https://visilean.com", "visilean.com"],
+  "BIM 360": ["https://acc.autodesk.com", "autodesk.com"],
+  AutoCAD: ["https://web.autocad.com", "autodesk.com"],
+  SketchUp: ["https://app.sketchup.com", "sketchup.com"],
+  Tekla: ["https://www.tekla.com", "tekla.com"],
+  MSP: ["https://project.microsoft.com", "microsoft.com"],
+  "Microsoft 365": ["https://www.office.com", "microsoft365.com"],
+  "Adobe CC": ["https://creativecloud.adobe.com", "adobe.com"],
+  Photoshop: ["https://photoshop.adobe.com", "adobe.com"],
+  "Acrobat Pro": ["https://acrobat.adobe.com", "adobe.com"],
+  Claude: ["https://claude.ai", "claude.ai"],
+  ChatGPT: ["https://chatgpt.com", "chatgpt.com"],
+  Copilot: ["https://copilot.microsoft.com", "copilot.microsoft.com"],
+  Adrenalin: ["", "myadrenalin.com"],
+  Complinity: ["https://www.complinity.com", "complinity.com"],
+  ManageEngine: ["https://sdpondemand.manageengine.com/app/itdesk", "manageengine.com"],
+  "Power BI": ["https://app.powerbi.com", "powerbi.com"],
+};
+for (const item of LANDSCAPE) { const l = LINKS[item.name]; if (l) { item.url = l[0] || undefined; item.domain = l[1]; } }
+export const landscapeItemFor = (name: string) => {
+  const n = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return LANDSCAPE.find((i) => [i.name, ...(i.aliases ?? [])].some((k) => n(k) === n(name)));
+};

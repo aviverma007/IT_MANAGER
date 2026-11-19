@@ -9,7 +9,7 @@ import type { AppUser, AppUserRow, Ticket, TicketCounts, TicketRow, TicketRuleFi
 import { hashPassword, newSalt, newToken, verifyPassword } from "./crypto";
 import { addDays, normalizeDate, nowIso, splitList, toBool, toNumber, uid, ymd } from "./util";
 import { emptyDb, freshDb, sampleDb } from "./seed";
-import { LANDSCAPE } from "./landscape";
+import { LANDSCAPE, landscapeItemFor } from "./landscape";
 
 export interface Store {
   load(): Promise<DB | null>;
@@ -98,6 +98,7 @@ export class Service {
     const loaded = await this.store.load();
     if (loaded && loaded.users?.length) {
       this.db = this.migrate(loaded);
+      for (const a of this.db.apps) if (a.source === "vendor" && !a.url) { const li = landscapeItemFor(a.name); if (li?.url) a.url = li.url; }
       // one-time: bring in the vendor apps from the Smartworld landscape if none exist yet
       const admin = this.db.users.find((u) => u.role === "admin" && u.active);
       if (admin && !this.db.apps.some((a) => a.source === "vendor") && !this.db.logs.some((l) => l.summary.startsWith("Loaded the application landscape"))) {
@@ -470,6 +471,7 @@ export class Service {
         if (!existing.activeUsersManual) existing.activeUsersManual = item.active;
         if (!existing.category || existing.category === "Internal tool") existing.category = item.category;
         if (!existing.hosting && item.hosting) existing.hosting = item.hosting;
+        if (!existing.url && item.url && !item.inHouse) existing.url = item.url;
         const have = new Set(existing.ticketKeywords.map((k) => k.toLowerCase()));
         existing.ticketKeywords = [...existing.ticketKeywords, ...(item.keywords ?? []).filter((k) => !have.has(k.toLowerCase()))];
         this.touch(existing);
@@ -479,7 +481,7 @@ export class Service {
       } else {
         const app = this.buildApp(ctx, {
           name: item.name, category: item.category, status: "live", seats: item.seats, activeUsersManual: item.active, hosting: item.hosting ?? "",
-          source: "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium", ticketKeywords: item.keywords ?? [],
+          source: "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium", ticketKeywords: item.keywords ?? [], url: item.url ?? "",
         });
         this.db.apps.push(app);
         created++;
