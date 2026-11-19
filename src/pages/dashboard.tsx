@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useOpenPeople } from "@/components/app/people";
-import { UsersRound } from "lucide-react";
+import { ChevronLeft, ChevronRight, UsersRound } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -32,20 +32,12 @@ export default function DashboardPage() {
   const { data: stats, isLoading } = useDashboard();
   const { data: apps } = useApps();
 
-  // Every application hangs on the wall, ordered by category and packed into rails of up to 9.
-  const rails = React.useMemo(() => {
+  // Every application on one rail, grouped by category (real screenshots first inside each category).
+  const wallApps = React.useMemo(() => {
     const groups = new Map<string, AppSummary[]>();
     for (const a of apps ?? []) groups.set(a.category || "Other", [...(groups.get(a.category || "Other") ?? []), a]);
     const ordered = [...groups.entries()].sort((x, y) => Number(y[1].some((a) => a.favorite)) - Number(x[1].some((a) => a.favorite)) || y[1].length - x[1].length || x[0].localeCompare(y[0]));
-    const flat = ordered.flatMap(([, list]) => [...list].sort((a, b) => Number(!!b.coverShot) - Number(!!a.coverShot) || Number(b.favorite) - Number(a.favorite) || b.usage.sessions30 - a.usage.sessions30 || a.name.localeCompare(b.name)));
-    const per = Math.ceil(flat.length / Math.max(1, Math.ceil(flat.length / 9)));
-    const out: { key: string; title: string; list: AppSummary[] }[] = [];
-    for (let i = 0; i < flat.length; i += per) {
-      const list = flat.slice(i, i + per);
-      const cats = [...new Set(list.map((a) => a.category || "Other"))];
-      out.push({ key: String(i), title: cats.length > 3 ? `${cats.slice(0, 3).join(" · ")} +${cats.length - 3}` : cats.join(" · "), list });
-    }
-    return out;
+    return ordered.flatMap(([, list]) => [...list].sort((a, b) => Number(!!b.coverShot || !!b.cover) - Number(!!a.coverShot || !!a.cover) || Number(b.favorite) - Number(a.favorite) || b.usage.sessions30 - a.usage.sessions30 || a.name.localeCompare(b.name)));
   }, [apps]);
 
   const t = stats?.totals;
@@ -108,16 +100,8 @@ export default function DashboardPage() {
         )}
       </motion.div>
 
-      {/* App wall — every application, a rail per category */}
-      {rails.length > 0 && (
-        <GlassCard className="overflow-hidden">
-          <div className="flex flex-col items-center gap-1 px-6 pt-7 text-center">
-            <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-muted-foreground">App wall · all {apps?.length ?? 0} applications</p>
-            <h2 className="text-balance text-2xl font-medium tracking-tight sm:text-3xl">Brush a rail to light an app, click to lift it.</h2>
-          </div>
-          {rails.map((r, i) => <WallRail key={r.key} title={r.title} list={r.list} first={i === 0} />)}
-        </GlassCard>
-      )}
+      {/* App wall — every application on one rail */}
+      {wallApps.length > 0 && <WallRail list={wallApps} />}
 
       <div className="grid gap-6 xl:grid-cols-3">
         <GlassCard className="p-5 xl:col-span-2">
@@ -234,37 +218,56 @@ export default function DashboardPage() {
 }
 
 const FRAME_CYCLE: PictureRailItem["frame"][] = ["black", "oak", "white"];
-function WallRail({ title, list, first }: { title: string; list: AppSummary[]; first: boolean }) {
+const SLOT = 168; // px of rail per frame
+
+function WallRail({ list }: { list: AppSummary[] }) {
   const navigate = useNavigate();
   const openPeople = useOpenPeople();
+  const scroller = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState<number | null>(null);
   const prints: PictureRailItem[] = React.useMemo(() => list.map((a, i) => ({
     id: a.id, title: a.name, artist: a.vendor || a.ownerName || a.department, year: a.version ? `v${a.version}` : STATUS_META[a.status].label,
     image: coverFor(a, 800, 1000), aspect: a.coverShot ? Math.min(1.9, Math.max(0.55, a.coverShot.width / a.coverShot.height)) : a.cover ? 1.6 : i % 3 === 1 ? 1 : 0.8,
-    frame: FRAME_CYCLE[i % 3], mat: i % 2 === 0, drop: [0.04, 0.12, -0.02, 0.16, 0.06, 0, 0.1, 0.03][i] ?? 0,
+    frame: FRAME_CYCLE[i % 3], mat: i % 2 === 0, drop: [0.04, 0.12, -0.02, 0.16, 0.06, 0, 0.1, 0.03][i % 8] ?? 0,
     tag: a.landscape.utilization !== null ? `${a.landscape.utilization}% seats` : a.tasksTotal ? `${a.progress}%` : STATUS_META[a.status].label,
     details: [STATUS_META[a.status].label, a.category, `${fmtNumber(a.landscape.activeUsers)}${a.seats ? ` / ${fmtNumber(a.seats)}` : ""} users`, a.tickets?.open ? `${a.tickets.open} open tickets` : `${a.tasksDone}/${a.tasksTotal} tasks done`],
   })), [list]);
   const cur = active === null ? null : list[active];
+  const scroll = (dir: number) => scroller.current?.scrollBy({ left: dir * scroller.current.clientWidth * 0.8, behavior: "smooth" });
+  // vertical wheel over the rail slides it sideways
+  React.useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) { const max = el.scrollWidth - el.clientWidth; if ((e.deltaY > 0 && el.scrollLeft < max) || (e.deltaY < 0 && el.scrollLeft > 0)) { e.preventDefault(); el.scrollLeft += e.deltaY; } } };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
   return (
-    <div className="border-t border-border/40 first:border-t-0">
-      <PictureRailGallery
-        items={prints}
-        eyebrow={title}
-        autoplay={first}
-        interval={3200}
-        onActiveChange={setActive}
-        className="!bg-transparent"
-        caption=" "
-        labels={{ front: "Front", back: "Back", close: "Close", open: "Click to lift" }}
-        action={
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button variant="primary" size="sm" disabled={!cur} onClick={() => cur && navigate(`/apps/${cur.id}`)}><ArrowRight />Open app page</Button>
-            <Button variant="secondary" size="sm" disabled={!cur} onClick={() => cur && openPeople(cur)}><UsersRound />Users</Button>
-            <Button variant="secondary" size="sm" disabled={!cur?.url} onClick={() => cur && openApp(cur)}><ExternalLink />Launch</Button>
+    <GlassCard className="overflow-hidden">
+      <div className="flex flex-col items-center gap-1 px-6 pt-7 text-center">
+        <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-muted-foreground">App wall · all {list.length} applications</p>
+        <h2 className="text-balance text-2xl font-medium tracking-tight sm:text-3xl">Brush the rail to light an app, click to lift it.</h2>
+      </div>
+      <div className="relative">
+        <button onClick={() => scroll(-1)} aria-label="Slide left" className="emboss absolute left-3 top-1/2 z-20 grid size-10 -translate-y-1/2 place-items-center rounded-full"><ChevronLeft className="size-5" /></button>
+        <button onClick={() => scroll(1)} aria-label="Slide right" className="emboss absolute right-3 top-1/2 z-20 grid size-10 -translate-y-1/2 place-items-center rounded-full"><ChevronRight className="size-5" /></button>
+        <div ref={scroller} className="overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:thin]">
+          <div style={{ width: Math.max(list.length * SLOT, 900) }}>
+            <PictureRailGallery items={prints} onActiveChange={setActive} hideFooter className="!bg-transparent" labels={{ front: "Front", back: "Back", close: "Close", open: "Click to lift" }} />
           </div>
-        }
-      />
-    </div>
+        </div>
+      </div>
+      <div className="flex flex-col items-center gap-3 px-6 pb-7 pt-2 text-center">
+        <div className="min-h-[2.75rem]">
+          <p className="text-sm font-medium">{cur ? cur.name : "Slide along the rail — scroll, drag the bar or use the arrows."}</p>
+          {cur && <p className="mt-0.5 text-[13px] text-muted-foreground">{[cur.category, cur.vendor || cur.ownerName, `${fmtNumber(cur.landscape.activeUsers)}${cur.seats ? ` / ${fmtNumber(cur.seats)}` : ""} users`, cur.tickets?.open ? `${cur.tickets.open} open tickets` : ""].filter(Boolean).join(" · ")}</p>}
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button variant="primary" size="sm" disabled={!cur} onClick={() => cur && navigate(`/apps/${cur.id}`)}><ArrowRight />Open app page</Button>
+          <Button variant="secondary" size="sm" disabled={!cur} onClick={() => cur && openPeople(cur)}><UsersRound />Users</Button>
+          <Button variant="secondary" size="sm" disabled={!cur?.url} onClick={() => cur && openApp(cur)}><ExternalLink />Launch</Button>
+        </div>
+      </div>
+    </GlassCard>
   );
 }

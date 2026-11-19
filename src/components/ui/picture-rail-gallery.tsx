@@ -52,6 +52,8 @@ export interface PictureRailGalleryProps extends React.ComponentProps<"section">
   onActiveChange?: (index: number | null) => void;
   onOpenChange?: (index: number | null) => void;
   labels?: PictureRailGalleryLabels;
+  /** Leave out the caption / action block under the rail (render your own outside). */
+  hideFooter?: boolean;
 }
 
 const DEFAULT_LABELS: PictureRailGalleryLabels = { front: "Front", back: "Back", close: "Close", open: "Lift to view" };
@@ -242,6 +244,7 @@ function resolveContacts(s: Sim, lay: Layout, list: Shape[], margin: number) {
 
 export function PictureRailGallery({
   items,
+  hideFooter,
   eyebrow,
   heading,
   caption,
@@ -838,13 +841,13 @@ export function PictureRailGallery({
         </div>
       )}
 
-      <div className="relative z-10 flex flex-col items-center gap-3 px-6 pb-7 pt-3 text-center">
+      {!hideFooter && <div className="relative z-10 flex flex-col items-center gap-3 px-6 pb-7 pt-3 text-center">
         <div id={`${uid}-caption`} aria-live="polite" className="min-h-[2.75rem]">
           <p className="text-sm font-medium">{currentItem ? currentItem.title : caption}</p>
           {currentItem && <p className="mt-0.5 text-[13px] text-muted-foreground">{byline}{byline ? " · " : ""}<span className="text-foreground/80">{labels.open}</span></p>}
         </div>
         {action}
-      </div>
+      </div>}
 
       {openIndex !== null && items[openIndex] && shapes[openIndex] && (
         <Detail

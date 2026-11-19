@@ -334,11 +334,21 @@ function logoDomain(a: { name: string; url: string }) {
 async function logoCover(a: (typeof service.db.apps)[number]) {
   const domain = logoDomain(a);
   if (!domain) return false;
-  const r = await fetch(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=256`, { signal: AbortSignal.timeout(10_000) });
-  if (!r.ok) return false;
-  const buf = Buffer.from(await r.arrayBuffer());
-  if (buf.length < 400) return false; // the generic globe
-  const type = r.headers.get("content-type") || "image/png";
+  const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=256`;
+  let buf: Buffer | null = null, type = "image/png";
+  try {
+    const r = await fetch(src, { signal: AbortSignal.timeout(10_000) });
+    if (r.ok) { buf = Buffer.from(await r.arrayBuffer()); type = r.headers.get("content-type") || type; }
+  } catch { /* no direct internet (company proxy) — try through Edge below */ }
+  if (!buf) {
+    // Edge uses the Windows proxy settings, so this works where Node's own requests can't get out
+    const ctx = await (await getBrowser()).newContext();
+    try {
+      const res = await (await ctx.newPage()).goto(src, { timeout: 15_000 });
+      if (res?.ok()) { buf = await res.body(); type = res.headers()["content-type"] || type; }
+    } finally { await ctx.close(); }
+  }
+  if (!buf || buf.length < 400) return false; // nothing, or the generic globe
   const tone = TONES[((a.tone || 1) - 1) % 5]!;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${tone}" stop-opacity=".22"/><stop offset="1" stop-color="${tone}" stop-opacity=".06"/></linearGradient>

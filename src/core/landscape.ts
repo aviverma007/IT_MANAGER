@@ -141,6 +141,8 @@ const LINKS: Record<string, [url: string, domain: string]> = {
   Complinity: ["https://www.complinity.com", "complinity.com"],
   ManageEngine: ["https://sdpondemand.manageengine.com/app/itdesk", "manageengine.com"],
   "Power BI": ["https://app.powerbi.com", "powerbi.com"],
+  "4QT": ["https://www.4qt.com", "4qt.com"],
+  "Ma Foi": ["", "mafoibusinessconsulting.com"],
 };
 for (const item of LANDSCAPE) { const l = LINKS[item.name]; if (l) { item.url = l[0] || undefined; item.domain = l[1]; } }
 export const landscapeItemFor = (name: string) => {
