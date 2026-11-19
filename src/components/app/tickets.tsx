@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import * as XLSX from "xlsx";
@@ -480,5 +481,53 @@ export function SuggestPanel({ apps }: { apps: AppSummary[] }) {
       </div>
       {data.terms.length > show && <Button variant="ghost" size="sm" onClick={() => setShow((n) => n + 24)}>Show more words</Button>}
     </div>
+  );
+}
+
+/** "🎫 34 open tickets" — hover (or tap) shows a popup with the latest open tickets; click opens the full list. */
+export function TicketHoverChip({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
+  const ref = React.useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = React.useState<{ x: number; y: number; up: boolean } | null>(null);
+  const timer = React.useRef<number>(0);
+  const { data: all } = useTickets();
+  const t = app.tickets;
+  const c = t.high ? "#f43f5e" : t.open ? "#f59e0b" : "#10b981";
+  const list = (all ?? []).filter((x) => x.appId === app.id && x.open).slice(0, 8);
+  function show() {
+    window.clearTimeout(timer.current);
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const up = r.bottom + 340 > window.innerHeight;
+    setPos({ x: Math.min(r.left, window.innerWidth - 400), y: up ? r.top - 8 : r.bottom + 8, up });
+  }
+  const hide = () => { timer.current = window.setTimeout(() => setPos(null), 150); };
+  return (
+    <>
+      <button ref={ref} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPos(null); onOpen(); }}
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums" style={{ color: c, background: `color-mix(in oklab, ${c} 13%, transparent)` }}>
+        <TicketIcon className="size-3.5" />{t.open} open ticket{t.open === 1 ? "" : "s"}{t.high ? ` · ${t.high} high` : ""}
+      </button>
+      {pos && createPortal(
+        <motion.div initial={{ opacity: 0, y: pos.up ? 6 : -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} onMouseEnter={() => window.clearTimeout(timer.current)} onMouseLeave={hide}
+          className="fixed z-[60] w-96 rounded-2xl border border-border bg-popover p-3 text-sm text-popover-foreground shadow-2xl" style={{ left: pos.x, top: pos.up ? undefined : pos.y, bottom: pos.up ? window.innerHeight - pos.y : undefined }}>
+          <div className="mb-2 flex items-center gap-2">
+            <TicketIcon className="size-4" style={{ color: c }} /><b>{app.name}</b>
+            <span className="ml-auto text-xs text-muted-foreground">{t.open} open · {t.created30} raised in 30 days · {t.total} total</span>
+          </div>
+          {list.length ? (
+            <ul className="flex flex-col gap-1">
+              {list.map((x) => (
+                <li key={x.id} className="flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60">
+                  <span className="mt-0.5 font-mono text-[10px] text-muted-foreground">#{x.displayId}</span>
+                  <span className="min-w-0 flex-1"><span className="line-clamp-1 font-medium">{x.subject}</span><span className="block truncate text-[11px] text-muted-foreground">{[x.priority, x.technician || "Unassigned", timeAgo(x.createdAt)].filter(Boolean).join(" · ")}</span></span>
+                  {x.url && <a href={x.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-muted-foreground hover:text-foreground" aria-label="Open in ServiceDesk"><ExternalLink className="size-3.5" /></a>}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="py-3 text-center text-xs text-muted-foreground">No open tickets — {t.total} closed.</p>}
+          <button onClick={() => { setPos(null); onOpen(); }} className="mt-2 w-full rounded-xl bg-primary/10 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15">See all {t.total} tickets →</button>
+        </motion.div>, document.body)}
+    </>
   );
 }

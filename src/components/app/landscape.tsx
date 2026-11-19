@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { AnimatedNumber, ProgressRing, Tabs } from "@/components/ui/bits";
 import { useConfirm } from "@/components/ui/modal";
 import { coverFor } from "@/lib/covers";
-import { TicketDrawer } from "@/components/app/tickets";
+import { TicketDrawer, TicketHoverChip } from "@/components/app/tickets";
 import { Ticket as TicketIcon } from "lucide-react";
 import { cn, fmtNumber } from "@/lib/utils";
 
@@ -89,7 +89,7 @@ function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: strin
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-lg font-semibold tracking-tight">{title}</h3>
           <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">{apps.length} app{apps.length === 1 ? "" : "s"} · {fmtNumber(t.active)} active{t.seats ? ` / ${fmtNumber(t.seats)} seats` : ""}
-            {anyT && <button onClick={() => onTickets({ title, appIds: apps.map((a) => a.id) })} className="inline-flex items-center gap-1 rounded-full px-1.5 font-semibold hover:underline" style={{ color: highT ? "#f43f5e" : openT ? "#f59e0b" : "#10b981" }}><TicketIcon className="size-3" />{openT} open ticket{openT === 1 ? "" : "s"}</button>}
+            {anyT && <button onClick={() => onTickets({ title, appIds: apps.map((a) => a.id) })} className="inline-flex items-center gap-1 rounded-full px-1.5 font-semibold hover:underline" style={{ color: highT ? "#f43f5e" : openT ? "#f59e0b" : "#10b981" }}><TicketIcon className="size-3" />{openT} open ticket{openT === 1 ? "" : "s"} — view</button>}
           </p>
         </div>
         {t.util !== null ? <ProgressRing value={Math.min(100, t.util)} size={52} stroke={5} color={utilColor(t.util)} /> : <span className="text-[11px] text-muted-foreground">no seats</span>}
@@ -100,22 +100,26 @@ function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: strin
             const u = a.landscape.utilization;
             return (
               <motion.li key={a.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
-                <Link to={`/apps/${a.id}`} className="grid grid-cols-[28px_minmax(0,1fr)_96px_92px] items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-muted/50">
-                  <img src={coverFor(a, 80, 80)} alt="" className="size-7 rounded-lg border border-border object-cover object-top" />
+                <Link to={`/apps/${a.id}`} className="grid grid-cols-[36px_minmax(0,1fr)_92px] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted/50">
+                  <img src={coverFor(a, 80, 80)} alt="" className="size-9 rounded-lg border border-border object-cover object-top" />
                   <span className="min-w-0">
-                    <span className="flex items-center gap-1.5 truncate text-sm font-medium">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground" title={a.landscape.activeSource === "tracked" ? "From usage tracking (peak day, 30 days)" : a.landscape.activeSource === "manual" ? "Entered on the app" : a.landscape.activeSource === "logged" ? "From usage entries (peak day, 30 days)" : ""}>
-                      {fmtNumber(a.landscape.activeUsers)}{a.seats ? ` / ${fmtNumber(a.seats)}` : ""} users{a.landscape.activeSource === "tracked" ? " · tracked" : ""}
-                      {a.tickets?.total ? <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTickets({ title: a.name, appIds: [a.id] }); }} className="ml-1.5 inline-flex items-center gap-0.5 font-semibold hover:underline" style={{ color: a.tickets.high ? "#f43f5e" : a.tickets.open ? "#f59e0b" : "#10b981" }} title="Drill down into this app's tickets"><TicketIcon className="size-3" />{a.tickets.open}</button> : null}
+                    <span className="flex items-center gap-1.5 truncate text-[15px] font-semibold">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm tabular-nums" title={a.landscape.activeSource === "tracked" ? "Active users from usage tracking (busiest day, last 30 days)" : a.landscape.activeSource === "manual" ? "Active users entered on the app" : a.landscape.activeSource === "logged" ? "Active users from usage entries (busiest day, last 30 days)" : "No user figures yet"}>
+                        <Users className="size-3.5 text-muted-foreground" />
+                        <b>{fmtNumber(a.landscape.activeUsers)}</b><span className="text-muted-foreground">{a.seats ? ` / ${fmtNumber(a.seats)} users` : " users"}</span>
+                        {a.landscape.activeSource === "tracked" && <span className="text-[10px] font-semibold uppercase text-emerald-600 dark:text-emerald-400">live</span>}
+                      </span>
+                      {a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : null}
                     </span>
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="deboss h-1.5 flex-1 overflow-hidden rounded-full">
+                  <span className="flex flex-col gap-1" title={u === null ? "Set licensed seats to see how many are in use" : `${fmtNumber(a.landscape.activeUsers)} of ${fmtNumber(a.seats)} licensed seats are in use`}>
+                    <span className="flex items-baseline justify-between gap-1"><span className="text-base font-bold tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</span><span className="text-[10px] text-muted-foreground">seats used</span></span>
+                    <span className="deboss h-1.5 overflow-hidden rounded-full">
                       <motion.span className="block h-full rounded-full" style={{ background: utilColor(u) }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} />
                     </span>
-                    <span className="w-8 text-right text-[11px] font-semibold tabular-nums">{u === null ? "—" : `${u}%`}</span>
+                    <span className="flex justify-end"><UsageTag app={a} /></span>
                   </span>
-                  <span className="flex justify-end"><UsageTag app={a} /></span>
                 </Link>
               </motion.li>
             );
@@ -157,7 +161,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 text-left">
           <motion.span animate={{ rotate: open ? 0 : -90 }} className="emboss grid size-8 place-items-center rounded-xl"><ChevronDown className="size-4" /></motion.span>
-          <span><span className="block text-lg font-semibold tracking-tight">Application landscape</span><span className="block text-xs text-muted-foreground">Licensed seats, active users and utilization by group</span></span>
+          <span><span className="block text-lg font-semibold tracking-tight">Application landscape</span><span className="block text-xs text-muted-foreground">Users, licensed seats, % of seats in use and open tickets — by group</span></span>
         </button>
         {open && <Tabs id="landscape-by" className="ml-auto" value={by} onChange={setBy} tabs={[{ value: "category", label: "By category", icon: <LayoutGrid /> }, { value: "hosting", label: "On-prem / Cloud", icon: <Server /> }, { value: "source", label: "In-house / Vendor", icon: <Code2 /> }]} />}
       </div>
@@ -196,7 +200,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
                 </AnimatePresence>
               </div>
               <p className="text-xs text-muted-foreground">
-                Utilization = active users ÷ licensed seats. <span style={{ color: "#10b981" }}>■</span> ≥85% healthy · <span style={{ color: "#3b82f6" }}>■</span> 60–84% OK · <span style={{ color: "#f59e0b" }}>■</span> 45–59% under-used · <span style={{ color: "#f43f5e" }}>■</span> &lt;45% review seats.
+                <b>Seats used %</b> = active users ÷ licensed seats (e.g. 96 of 120 licences in use = 80%). <span style={{ color: "#10b981" }}>■</span> ≥85% healthy · <span style={{ color: "#3b82f6" }}>■</span> 60–84% OK · <span style={{ color: "#f59e0b" }}>■</span> 45–59% under-used · <span style={{ color: "#f43f5e" }}>■</span> &lt;45% review seats.
                 Active users come from the tracking script (busiest day in the last 30 days) where it's installed, otherwise the figure entered on the app, otherwise logged usage entries.
               </p>
             </div>
