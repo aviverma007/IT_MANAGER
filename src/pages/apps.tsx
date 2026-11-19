@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import * as XLSX from "xlsx";
 import {
-  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users2,
+  Camera, AppWindow, ArrowDownWideNarrow, Columns3, Download, ExternalLink, FileSpreadsheet, LayoutGrid, Lock, Plus, Rows3, Search, Star, Users, Users2,
 } from "lucide-react";
 import { useApps, useRun } from "@/api/hooks";
 import { useMe } from "@/lib/auth";
@@ -20,10 +20,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn, fmtDate, fmtNumber, STATUS_HEX, STATUS_META, toneHex } from "@/lib/utils";
 import { openApp } from "@/lib/launch";
-import { Landscape } from "@/components/app/landscape";
+import { Landscape, utilColor } from "@/components/app/landscape";
 
 type View = "grid" | "list" | "board";
-type Sort = "updated" | "name" | "progress" | "usage" | "golive";
+type Sort = "updated" | "name" | "progress" | "usage" | "users" | "utilization" | "golive";
 
 function FavoriteButton({ app }: { app: AppSummary }) {
   const run = useRun();
@@ -33,6 +33,19 @@ function FavoriteButton({ app }: { app: AppSummary }) {
       aria-label={app.favorite ? "Unpin" : "Pin"} title={app.favorite ? "Unpin" : "Pin to sidebar"}>
       <Star className={cn("size-4", app.favorite && "fill-current")} />
     </motion.button>
+  );
+}
+
+/** Users (active / seats) + usage % pill, used on cards, rows and board. */
+function UsersUsage({ app, compact }: { app: AppSummary; compact?: boolean }) {
+  const { activeUsers, utilization: u } = app.landscape;
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 tabular-nums", compact ? "text-[11px]" : "text-xs")} title={u === null ? "Set licensed seats on the app to see usage %" : "Active users ÷ licensed seats"}>
+      <Users className={compact ? "size-3" : "size-3.5"} style={{ color: utilColor(u) }} />
+      <span className="font-semibold text-foreground">{fmtNumber(activeUsers)}</span>
+      <span className="text-muted-foreground">{app.seats ? `/ ${fmtNumber(app.seats)} users` : "users"}</span>
+      <span className="rounded-full px-1.5 py-px font-bold" style={{ color: utilColor(u), background: `color-mix(in oklab, ${utilColor(u)} 14%, transparent)` }}>{u === null ? "—" : `${u}%`}</span>
+    </span>
   );
 }
 
@@ -63,6 +76,7 @@ function AppCard({ app, index }: { app: AppSummary; index: number }) {
           <div className="flex flex-wrap gap-1.5">{app.techStack.slice(0, 3).map((t) => <Chip key={t}>{t}</Chip>)}{app.techStack.length > 3 && <Chip>+{app.techStack.length - 3}</Chip>}</div>
           <div className="mt-auto flex items-end justify-between gap-3 border-t border-border pt-3">
             <div className="text-xs text-muted-foreground">
+              <div className="mb-1"><UsersUsage app={app} /></div>
               <div className="font-medium text-foreground">{fmtNumber(app.usage.sessions30)} <span className="font-normal text-muted-foreground">sessions · 30d</span></div>
               <div>{app.tasksDone}/{app.tasksTotal} tasks{app.overdue > 0 && <span className="text-rose-400"> · {app.overdue} overdue</span>}</div>
             </div>
@@ -90,6 +104,7 @@ function AppRow({ app, index }: { app: AppSummary; index: number }) {
       </td>
       <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
       <td className="w-48 px-4 py-3"><div className="flex items-center gap-2"><ProgressBar value={app.progress} color={toneHex(app.tone)} /><span className="w-9 text-right text-xs tabular-nums">{app.progress}%</span></div></td>
+      <td className="px-4 py-3"><UsersUsage app={app} /></td>
       <td className="px-4 py-3 text-sm tabular-nums">{fmtNumber(app.usage.sessions30)}</td>
       <td className="px-4 py-3 text-sm">{app.ownerName || "—"}</td>
       <td className="px-4 py-3 text-sm text-muted-foreground">{fmtDate(app.goLiveDate)}</td>
@@ -137,6 +152,7 @@ function Board({ apps }: { apps: AppSummary[] }) {
                         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{a.name}</div><div className="truncate text-[11px] text-muted-foreground">{a.ownerName || a.department}</div></div>
                       </div>
                       <div className="mt-2.5 flex items-center gap-2"><ProgressBar value={a.progress} color={toneHex(a.tone)} className="h-1.5" /><span className="text-[11px] tabular-nums text-muted-foreground">{a.progress}%</span></div>
+                      <div className="mt-2"><UsersUsage app={a} compact /></div>
                     </Link>
                   </motion.div>
                 ))}
@@ -195,6 +211,8 @@ export default function AppsPage() {
       name: (a, b) => a.name.localeCompare(b.name),
       progress: (a, b) => b.progress - a.progress,
       usage: (a, b) => b.usage.sessions30 - a.usage.sessions30,
+      users: (a, b) => b.landscape.activeUsers - a.landscape.activeUsers,
+      utilization: (a, b) => (b.landscape.utilization ?? -1) - (a.landscape.utilization ?? -1),
       golive: (a, b) => (a.goLiveDate || "9999").localeCompare(b.goLiveDate || "9999"),
     };
     return filtered.sort((a, b) => Number(b.favorite) - Number(a.favorite) || sorters[sort](a, b));
@@ -239,7 +257,7 @@ export default function AppsPage() {
         <MultiSelect className="w-48" label="Status" placeholder="All statuses" value={statuses} onChange={(v) => setParams(v.length ? { status: v.join(",") } : {})} searchable={false} options={APP_STATUSES.filter((s) => counts[s]).map((s) => ({ value: s, label: STATUS_META[s].label, color: STATUS_HEX[s], hint: String(counts[s]) }))} />
         <div className="flex w-52 items-center gap-2"><ArrowDownWideNarrow className="size-4 shrink-0 text-muted-foreground" />
           <Select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-            <option value="updated">Recently updated</option><option value="name">Name</option><option value="progress">Progress</option><option value="usage">Most used</option><option value="golive">Go-live date</option>
+            <option value="updated">Recently updated</option><option value="name">Name</option><option value="progress">Progress</option><option value="usage">Most sessions</option><option value="users">Most users</option><option value="utilization">Usage %</option><option value="golive">Go-live date</option>
           </Select>
         </div>
         <Button variant={onlyMine ? "primary" : "secondary"} onClick={() => setOnlyMine((v) => !v)}><Users2 />Mine & pinned</Button>
@@ -274,7 +292,7 @@ export default function AppsPage() {
             {view === "list" && (
               <motion.div key="list" className="glass overflow-x-auto rounded-3xl" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <table className="w-full min-w-[860px]">
-                  <thead><tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">{["Application", "Status", "Progress", "Sessions 30d", "Owner", "Go-live", ""].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
+                  <thead><tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">{["Application", "Status", "Progress", "Users / usage", "Sessions 30d", "Owner", "Go-live", ""].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
                   <tbody><AnimatePresence>{list.map((a, i) => <AppRow key={a.id} app={a} index={i} />)}</AnimatePresence></tbody>
                 </table>
               </motion.div>
