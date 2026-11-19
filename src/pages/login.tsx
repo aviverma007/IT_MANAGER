@@ -17,8 +17,6 @@ const FEATURES = [
 
 const DEMO_USERS = [
   { u: "admin", p: "admin123", role: "Admin", hint: "Full access" },
-  { u: "priya", p: "editor123", role: "Editor", hint: "Edits apps" },
-  { u: "rahul", p: "viewer123", role: "Viewer", hint: "Read-only" },
 ];
 
 export default function LoginPage() {
@@ -112,8 +110,8 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-8">
-            <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground"><span className="h-px flex-1 bg-border" />{DEMO ? "Demo accounts" : "Sample accounts"}<span className="h-px flex-1 bg-border" /></div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground"><span className="h-px flex-1 bg-border" />{DEMO ? "Demo account" : "Administrator"}<span className="h-px flex-1 bg-border" /></div>
+            <div className="grid grid-cols-1 gap-2">
               {DEMO_USERS.map((d, i) => (
                 <motion.button key={d.u} type="button" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.07 }} whileHover={{ y: -3 }} whileTap={{ scale: 0.95 }}
                   onClick={() => { setUsername(d.u); setPassword(d.p); void submit(undefined, d.u, d.p); }}

@@ -2,14 +2,14 @@ import * as React from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import * as XLSX from "xlsx";
-import { AlarmClock, CalendarClock, CheckCircle2, Columns3, Download, ListChecks, Plus, Rows3, Search, User, X } from "lucide-react";
+import { AlarmClock, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Columns3, Download, ExternalLink, ListChecks, Plus, Rows3, Search, User, X } from "lucide-react";
 import { useAllTasks, useApp, useApps, useRun } from "@/api/hooks";
 import { useMe } from "@/lib/auth";
 import { PRIORITIES, type Priority, type TaskRow } from "@/core/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { AnimatedNumber, Checkbox, EmptyState, GlassCard, PriorityDot, Skeleton, Tabs } from "@/components/ui/bits";
-import { Modal } from "@/components/ui/modal";
+import { Drawer, Modal } from "@/components/ui/modal";
 import { AssigneeSelect, splitAssignees, useAssigneeNames } from "@/components/app/assignee";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { cn, fmtDate, PRIORITY_META, toneHex } from "@/lib/utils";
@@ -39,24 +39,147 @@ const BUCKETS = [
   { key: "done", label: "Done", color: "#10b981" },
 ] as const;
 
-function TaskLine({ t, done, onToggle, showApp = true }: { t: TaskRow; done: boolean; onToggle: (v: boolean) => void; showApp?: boolean }) {
+function TaskLine({ t, done, onToggle, onOpen, showApp = true, card }: { t: TaskRow; done: boolean; onToggle: (v: boolean) => void; onOpen: () => void; showApp?: boolean; card?: boolean }) {
   const b = bucket(t, done);
+  const due = t.dueDate && !done && <span className={cn("shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-medium", b === "overdue" ? "bg-rose-500/15 text-rose-500" : b === "today" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{fmtDate(t.dueDate, { day: "numeric", month: "short" })}</span>;
+  const who = t.assignee && <span className="inline-flex max-w-full items-center gap-1 truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" title={t.assignee}><User className="size-3 shrink-0" /><span className="truncate">{splitAssignees(t.assignee).map((n) => n.split(" ")[0]).join(", ")}</span></span>;
+  if (card) {
+    return (
+      <motion.li layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 30, height: 0 }} transition={{ type: "spring", stiffness: 320, damping: 30 }}
+        className={cn("emboss group flex shrink-0 gap-2.5 rounded-2xl border border-border p-3", done && "opacity-60")}>
+        <span className="pt-0.5"><Checkbox checked={done} onChange={onToggle} disabled={!t.canEdit} label={`Mark "${t.title}" ${done ? "not done" : "done"}`} /></span>
+        <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+          <span className="flex items-start gap-2">
+            <span className={cn("line-clamp-2 flex-1 text-sm font-medium leading-snug group-hover:text-primary", done && "text-muted-foreground line-through")}>{t.title}</span>
+            <PriorityDot priority={t.priority} />
+          </span>
+          {showApp && <span className="mt-1 flex items-center gap-1 truncate text-[11px] font-medium" style={{ color: toneHex(t.appTone) }}><span className="size-1.5 shrink-0 rounded-full" style={{ background: toneHex(t.appTone) }} /><span className="truncate">{t.appName}</span></span>}
+          <span className="block truncate text-[11px] text-muted-foreground">{t.groupTitle}</span>
+          {(t.assignee || (t.dueDate && !done)) && <span className="mt-1.5 flex flex-wrap items-center gap-1.5">{who}{due}</span>}
+        </button>
+      </motion.li>
+    );
+  }
   return (
     <motion.li layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 30, height: 0 }} transition={{ type: "spring", stiffness: 320, damping: 30 }}
       className={cn("group flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors hover:bg-muted/40", done && "opacity-60")}>
       <Checkbox checked={done} onChange={onToggle} disabled={!t.canEdit} label={`Mark "${t.title}" ${done ? "not done" : "done"}`} />
-      <Link to={`/apps/${t.appId}/tasks`} className="min-w-0 flex-1">
-        <div className={cn("truncate text-sm", done && "text-muted-foreground line-through")}>{t.title}</div>
+      <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <div className={cn("truncate text-sm group-hover:text-primary", done && "text-muted-foreground line-through")}>{t.title}</div>
         <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
           {showApp && <span className="inline-flex items-center gap-1 font-medium" style={{ color: toneHex(t.appTone) }}><span className="size-1.5 rounded-full" style={{ background: toneHex(t.appTone) }} />{t.appName}</span>}
           <span className="truncate">{t.groupTitle}</span>
           {t.notes && <span className="truncate italic">· {t.notes.slice(0, 60)}</span>}
         </div>
-      </Link>
-      {t.assignee && <span className="hidden max-w-48 items-center gap-1 truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground sm:inline-flex" title={t.assignee}><User className="size-3 shrink-0" /><span className="truncate">{splitAssignees(t.assignee).map((n) => n.split(" ")[0]).join(", ")}</span></span>}
-      {t.dueDate && !done && <span className={cn("shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-medium", b === "overdue" ? "bg-rose-500/15 text-rose-500" : b === "today" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>{fmtDate(t.dueDate, { day: "numeric", month: "short" })}</span>}
+      </button>
+      {t.assignee && <span className="hidden max-w-48 sm:inline-flex">{who}</span>}
+      {due}
       <PriorityDot priority={t.priority} />
     </motion.li>
+  );
+}
+
+/** Drill-down: everything about one task, editable in place. */
+function TaskDrawer({ task, onClose, onToggle, done }: { task: TaskRow | null; onClose: () => void; onToggle: (v: boolean) => void; done: boolean }) {
+  const run = useRun();
+  const [f, setF] = React.useState({ title: "", assignee: "", dueDate: "", priority: "medium", notes: "" });
+  React.useEffect(() => { if (task) setF({ title: task.title, assignee: task.assignee, dueDate: task.dueDate, priority: task.priority, notes: task.notes }); }, [task?.id]); // eslint-disable-line
+  if (!task) return <Drawer open={false} onClose={onClose} title="Task">{null}</Drawer>;
+  const b = bucket(task, done);
+  const meta = BUCKETS.find((x) => x.key === b)!;
+  const dirty = f.title !== task.title || f.assignee !== task.assignee || f.dueDate !== task.dueDate || f.priority !== task.priority || f.notes !== task.notes;
+  async function save() {
+    const r = await run("tasks.update", { id: task!.id, ...f }, { success: "Task saved" });
+    if (r) onClose();
+  }
+  return (
+    <Drawer open={!!task} onClose={onClose} title="Task"
+      footer={<div className="flex w-full items-center gap-2">
+        <Link to={`/apps/${task.appId}/tasks`} onClick={onClose}><Button variant="ghost"><ExternalLink />Open in {task.appName}</Button></Link>
+        <span className="flex-1" />
+        {task.canEdit && <Button variant="primary" disabled={!dirty || !f.title.trim()} onClick={save}>Save changes</Button>}
+      </div>}>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold" style={{ color: meta.color, background: `color-mix(in oklab, ${meta.color} 14%, transparent)` }}><span className="size-1.5 rounded-full" style={{ background: meta.color }} />{meta.label}</span>
+          <Link to={`/apps/${task.appId}`} onClick={onClose} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-medium hover:underline"><span className="size-1.5 rounded-full" style={{ background: toneHex(task.appTone) }} />{task.appName}</Link>
+          <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{task.groupTitle}</span>
+        </div>
+        <label className={cn("deboss flex items-center gap-3 rounded-2xl p-3", !task.canEdit && "opacity-70")}>
+          <Checkbox checked={done} onChange={onToggle} disabled={!task.canEdit} label="Done" />
+          <span className="text-sm">{done ? <>Done{task.doneBy ? <> by <b>{task.doneBy}</b></> : null}{task.doneAt ? ` · ${fmtDate(task.doneAt)}` : ""}</> : "Not done yet — tick to complete"}</span>
+        </label>
+        {task.canEdit ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Task" className="sm:col-span-2"><Textarea value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} className="min-h-16" /></Field>
+            <Field label="Assignee"><AssigneeSelect value={f.assignee} onChange={(v) => setF({ ...f, assignee: v })} /></Field>
+            <Field label="Due date"><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></Field>
+            <Field label="Priority" className="sm:col-span-2">
+              <div className="grid grid-cols-4 gap-2">{PRIORITIES.map((p) => <button key={p} onClick={() => setF({ ...f, priority: p })} className={cn("rounded-xl border px-2 py-2 text-xs", f.priority === p ? "emboss border-ring" : "border-border text-muted-foreground hover:border-ring")}><PriorityDot priority={p} withLabel /></button>)}</div>
+            </Field>
+            <Field label="Notes" className="sm:col-span-2"><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} className="min-h-28" placeholder="Details, links, blockers…" /></Field>
+          </div>
+        ) : (
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div className="col-span-2"><dt className="text-xs text-muted-foreground">Task</dt><dd className="font-medium">{task.title}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Assignee</dt><dd>{task.assignee || "—"}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Due</dt><dd>{task.dueDate ? fmtDate(task.dueDate) : "—"}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Priority</dt><dd><PriorityDot priority={task.priority} withLabel /></dd></div>
+            <div className="col-span-2"><dt className="text-xs text-muted-foreground">Notes</dt><dd className="whitespace-pre-wrap">{task.notes || "—"}</dd></div>
+          </dl>
+        )}
+        <p className="text-[11px] text-muted-foreground">Created {fmtDate(task.createdAt)}{!task.canEdit ? " · you have view-only rights on this application" : ""}</p>
+      </div>
+    </Drawer>
+  );
+}
+
+/** A due-date column with its own up/down scroller. Header opens the whole column in a drawer. */
+function BucketColumn({ b, items, isDone, toggle, onOpen, onDrill }: { b: (typeof BUCKETS)[number]; items: TaskRow[]; isDone: (t: TaskRow) => boolean; toggle: (t: TaskRow, v: boolean) => void; onOpen: (t: TaskRow) => void; onDrill: () => void }) {
+  const ref = React.useRef<HTMLUListElement>(null);
+  const [edge, setEdge] = React.useState({ up: false, down: false });
+  const measure = React.useCallback(() => { const el = ref.current; if (el) setEdge({ up: el.scrollTop > 4, down: el.scrollTop + el.clientHeight < el.scrollHeight - 4 }); }, []);
+  React.useEffect(() => { measure(); }, [items.length, measure]);
+  const step = (dir: number) => ref.current?.scrollBy({ top: dir * ref.current.clientHeight * 0.8, behavior: "smooth" });
+  return (
+    <div className="glass flex max-h-[calc(100vh-17rem)] min-h-64 w-80 shrink-0 flex-col rounded-3xl p-3">
+      <div className="mb-2 flex items-center justify-between gap-2 px-2">
+        <button onClick={onDrill} disabled={!items.length} className="flex items-center gap-2 text-sm font-semibold hover:underline disabled:no-underline" title="Open this column"><span className="size-2.5 rounded-full" style={{ background: b.color, boxShadow: `0 0 10px ${b.color}` }} />{b.label}</button>
+        <span className="flex items-center gap-1">
+          {(edge.up || edge.down) && <>
+            <button onClick={() => step(-1)} disabled={!edge.up} aria-label="Scroll up" className="emboss grid size-6 place-items-center rounded-full disabled:opacity-30"><ChevronUp className="size-3.5" /></button>
+            <button onClick={() => step(1)} disabled={!edge.down} aria-label="Scroll down" className="emboss grid size-6 place-items-center rounded-full disabled:opacity-30"><ChevronDown className="size-3.5" /></button>
+          </>}
+          <button onClick={onDrill} disabled={!items.length} className="rounded-full bg-muted px-2 text-xs tabular-nums hover:bg-primary/15 hover:text-primary">{items.length}</button>
+        </span>
+      </div>
+      <ul ref={ref} onScroll={measure} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-0.5 pb-1 [scrollbar-width:thin]">
+        <AnimatePresence initial={false}>{items.map((t) => <TaskLine key={t.id} t={t} done={isDone(t)} onToggle={(v) => toggle(t, v)} onOpen={() => onOpen(t)} card />)}</AnimatePresence>
+        {!items.length && <li className="grid flex-1 place-items-center rounded-2xl border border-dashed border-border py-6 text-xs text-muted-foreground">Nothing</li>}
+      </ul>
+    </div>
+  );
+}
+
+/** Drill-down for a whole column: tasks grouped by application with counts. */
+function BucketDrawer({ target, onClose, isDone, toggle, onOpen }: { target: { label: string; color: string; items: TaskRow[] } | null; onClose: () => void; isDone: (t: TaskRow) => boolean; toggle: (t: TaskRow, v: boolean) => void; onOpen: (t: TaskRow) => void }) {
+  const groups = React.useMemo(() => {
+    const m = new Map<string, TaskRow[]>();
+    for (const t of target?.items ?? []) m.set(t.appId, [...(m.get(t.appId) ?? []), t]);
+    return [...m.values()].sort((a, b) => b.length - a.length);
+  }, [target]);
+  return (
+    <Drawer open={!!target} onClose={onClose} title={target ? `${target.label} · ${target.items.length} task${target.items.length === 1 ? "" : "s"}` : "Tasks"} wide>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-1.5">{groups.map((g) => <span key={g[0]!.appId} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs"><span className="size-1.5 rounded-full" style={{ background: toneHex(g[0]!.appTone) }} />{g[0]!.appName} <b>{g.length}</b></span>)}</div>
+        {groups.map((g) => (
+          <section key={g[0]!.appId} className="rounded-2xl border border-border p-2">
+            <header className="flex items-center gap-2 px-2 py-1"><span className="size-2.5 rounded-full" style={{ background: toneHex(g[0]!.appTone) }} /><Link to={`/apps/${g[0]!.appId}/tasks`} onClick={onClose} className="font-semibold hover:underline">{g[0]!.appName}</Link><span className="ml-auto text-xs text-muted-foreground">{g.length}</span></header>
+            <ul>{g.map((t) => <TaskLine key={t.id} t={t} done={isDone(t)} onToggle={(v) => toggle(t, v)} onOpen={() => onOpen(t)} showApp={false} />)}</ul>
+          </section>
+        ))}
+      </div>
+    </Drawer>
   );
 }
 
@@ -113,6 +236,8 @@ export default function TasksPage() {
   const [mine, setMine] = React.useState(false);
   const [pending, setPending] = React.useState<Record<string, boolean>>({});
   const [adding, setAdding] = React.useState(false);
+  const [openTask, setOpenTask] = React.useState<TaskRow | null>(null);
+  const [drill, setDrill] = React.useState<{ label: string; color: string; items: TaskRow[] } | null>(null);
   React.useEffect(() => { try { localStorage.setItem("itm.tasksView", view); } catch { /* ignore */ } }, [view]);
 
   const isDone = (t: TaskRow) => pending[t.id] ?? t.done;
@@ -215,7 +340,7 @@ export default function TasksPage() {
                         <Link to={`/apps/${id}/tasks`} className="min-w-0 flex-1 truncate font-semibold hover:underline">{first.appName}</Link>
                         <span className="text-xs tabular-nums text-muted-foreground">{items.length} shown · {pct}% done</span>
                       </header>
-                      <ul><AnimatePresence initial={false}>{items.map((t) => <TaskLine key={t.id} t={t} done={isDone(t)} onToggle={(v) => toggle(t, v)} showApp={false} />)}</AnimatePresence></ul>
+                      <ul><AnimatePresence initial={false}>{items.map((t) => <TaskLine key={t.id} t={t} done={isDone(t)} onToggle={(v) => toggle(t, v)} onOpen={() => setOpenTask(t)} showApp={false} />)}</AnimatePresence></ul>
                     </motion.section>
                   );
                 })}
@@ -226,21 +351,14 @@ export default function TasksPage() {
               {BUCKETS.filter((b) => status === "all" || status === "done" ? true : b.key !== "done").map((b) => {
                 const items = list.filter((t) => bucket(t, isDone(t)) === b.key);
                 if (!items.length && (status === "overdue" || status === "week")) return null;
-                return (
-                  <div key={b.key} className="glass flex w-80 shrink-0 flex-col rounded-3xl p-3">
-                    <div className="mb-2 flex items-center justify-between px-2">
-                      <span className="flex items-center gap-2 text-sm font-semibold"><span className="size-2.5 rounded-full" style={{ background: b.color, boxShadow: `0 0 10px ${b.color}` }} />{b.label}</span>
-                      <span className="rounded-full bg-muted px-2 text-xs tabular-nums">{items.length}</span>
-                    </div>
-                    <ul className="flex min-h-20 flex-col"><AnimatePresence initial={false}>{items.map((t) => <TaskLine key={t.id} t={t} done={isDone(t)} onToggle={(v) => toggle(t, v)} />)}</AnimatePresence></ul>
-                    {!items.length && <div className="grid flex-1 place-items-center rounded-2xl border border-dashed border-border py-6 text-xs text-muted-foreground">Nothing</div>}
-                  </div>
-                );
+                return <BucketColumn key={b.key} b={b} items={items} isDone={isDone} toggle={toggle} onOpen={setOpenTask} onDrill={() => setDrill({ label: b.label, color: b.color, items })} />;
               })}
             </div>
           )}
 
       <NewTaskModal open={adding} onClose={() => setAdding(false)} />
+      <BucketDrawer target={drill} onClose={() => setDrill(null)} isDone={isDone} toggle={toggle} onOpen={setOpenTask} />
+      <TaskDrawer task={openTask ? (all.find((t) => t.id === openTask.id) ?? openTask) : null} done={openTask ? isDone(all.find((t) => t.id === openTask.id) ?? openTask) : false} onToggle={(v) => openTask && toggle(openTask, v)} onClose={() => setOpenTask(null)} />
     </div>
   );
 }
