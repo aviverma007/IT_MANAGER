@@ -313,8 +313,12 @@ app.post("/api/:method", async (req, res) => {
 app.get("/api/health", (_req, res) => res.json({ ok: true, apps: service.db.apps.length, time: new Date().toISOString() }));
 
 if (fs.existsSync(DIST)) {
-  app.use(express.static(DIST, { index: "index.html", maxAge: "1h" }));
-  app.use((req, res, next) => (req.method === "GET" && !req.path.startsWith("/api") ? res.sendFile(path.join(DIST, "index.html")) : next()));
+  // index.html is never cached, so a new build shows up on the next refresh; hashed /assets files can be cached for a long time
+  app.use(express.static(DIST, {
+    index: "index.html",
+    setHeaders: (res, file) => res.setHeader("Cache-Control", file.endsWith(".html") ? "no-cache" : /[\\/]assets[\\/]/.test(file) ? "public, max-age=31536000, immutable" : "public, max-age=3600"),
+  }));
+  app.use((req, res, next) => (req.method === "GET" && !req.path.startsWith("/api") ? res.setHeader("Cache-Control", "no-cache").sendFile(path.join(DIST, "index.html")) : next()));
 }
 
 
