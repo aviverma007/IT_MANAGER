@@ -1218,6 +1218,8 @@ export class Service {
           if (!existing.activeUsersManual) existing.activeUsersManual = item.active;
           if (!existing.category || existing.category === "Internal tool") existing.category = item.category;
           if (!existing.hosting && item.hosting) existing.hosting = item.hosting;
+          const have = new Set(existing.ticketKeywords.map((k) => k.toLowerCase()));
+          existing.ticketKeywords = [...existing.ticketKeywords, ...(item.keywords ?? []).filter((k) => !have.has(k.toLowerCase()))];
           this.touch(existing);
           updated++;
         } else if (item.inHouse) {
@@ -1225,7 +1227,7 @@ export class Service {
         } else {
           const app = this.buildApp(ctx, {
             name: item.name, category: item.category, status: "live", seats: item.seats, activeUsersManual: item.active, hosting: item.hosting ?? "",
-            source: "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium",
+            source: "vendor", vendor: item.vendor ?? "", tagline: item.tagline ?? "", priority: "medium", ticketKeywords: item.keywords ?? [],
           });
           this.db.apps.push(app);
           created++;

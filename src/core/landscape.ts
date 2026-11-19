@@ -14,6 +14,8 @@ export interface LandscapeItem {
   tagline?: string;
   /** other names the same app goes by in IT Manager */
   aliases?: string[];
+  /** words in helpdesk tickets that mean this app */
+  keywords?: string[];
 }
 
 const L = (name: string, category: string, seats: number, active: number, hosting: Hosting = "", extra: Partial<LandscapeItem> = {}): LandscapeItem => ({ name, category, seats, active, hosting, ...extra });
@@ -76,3 +78,24 @@ export const LANDSCAPE: LandscapeItem[] = [
   L("Document Flow", "In-house", 8, 3, "on-prem", { inHouse: true, aliases: ["DOC_FLOW"] }),
   L("SmartDB Mobile", "In-house", 60, 22, "on-prem", { inHouse: true, tagline: "Android app of the analytics dashboard" }),
 ];
+
+/** Default helpdesk keywords per app (added to the app's "Ticket keywords" when the landscape is loaded). */
+const KEYWORDS: Record<string, string[]> = {
+  SAP: ["S4", "S/4", "S4HANA", "FICO", "SAP GUI", "T-code"],
+  Tally: ["Tally Prime"],
+  Salesforce: ["SFDC"],
+  Knowlarity: ["telephony", "IVR", "call recording"],
+  "Microsoft 365": ["Outlook", "Teams", "OneDrive", "SharePoint", "Excel", "PowerPoint", "mailbox", "email", "e-mail", "O365", "MS Office", "Office 365"],
+  "Adobe CC": ["Creative Cloud", "Illustrator", "InDesign"],
+  "Acrobat Pro": ["Acrobat", "PDF editor"],
+  Adrenalin: ["HRMS", "payroll", "payslip", "attendance"],
+  ManageEngine: ["ServiceDesk", "SDP"],
+  "Power BI": ["PBI"],
+  MSP: ["MS Project", "Microsoft Project"],
+  "BIM 360": ["BIM"],
+  ChatGPT: ["OpenAI", "GPT"],
+  Brevo: ["Sendinblue"],
+  Engati: ["chatbot", "WhatsApp bot"],
+  "Ma Foi": ["MaFoi"],
+};
+for (const item of LANDSCAPE) item.keywords = KEYWORDS[item.name] ?? [];

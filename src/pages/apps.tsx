@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { cn, fmtDate, fmtNumber, STATUS_HEX, STATUS_META, toneHex } from "@/lib/utils";
 import { openApp } from "@/lib/launch";
 import { Landscape, utilColor } from "@/components/app/landscape";
-import { TicketBadge } from "@/components/app/tickets";
+import { TicketBadge, TicketsOverview } from "@/components/app/tickets";
 
 type View = "grid" | "list" | "board";
 type Sort = "updated" | "name" | "progress" | "usage" | "users" | "utilization" | "golive";
@@ -247,6 +247,8 @@ export default function AppsPage() {
           {me.role !== "viewer" && <Button variant="primary" onClick={() => setCreating(true)}><Plus />New</Button>}
         </div>
       </div>
+
+      <TicketsOverview apps={apps ?? []} />
 
       <Landscape apps={list} allApps={apps ?? []} />
 

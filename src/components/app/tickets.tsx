@@ -13,6 +13,7 @@ import { Input, Select } from "@/components/ui/field";
 import { AnimatedNumber, EmptyState, Skeleton, Tabs } from "@/components/ui/bits";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { ImportWizard } from "@/components/app/import-wizard";
+import { Drawer } from "@/components/ui/modal";
 import { cn, fmtDateTime, fmtNumber, timeAgo, toneHex } from "@/lib/utils";
 
 export type TicketStatusInfo = { sync: TicketSync; rules: TicketRule[]; total: number; sample: boolean; canManage: boolean };
@@ -88,7 +89,10 @@ export function TicketTable({ rows, fixedApp, apps }: { rows: TicketRow[]; fixed
   const [tech, setTech] = React.useState<string[]>([]);
   const [cat, setCat] = React.useState<string[]>([]);
   const [limit, setLimit] = React.useState(100);
+  const [sel, setSel] = React.useState<Set<string>>(new Set());
+  const [detail, setDetail] = React.useState<TicketRow | null>(null);
   const editable = new Set(apps.filter((a) => a.permission === "edit").map((a) => a.id));
+  const canBulk = me.role !== "viewer";
   const uniq = (f: (t: TicketRow) => string) => [...new Set(rows.map(f).filter(Boolean))].sort();
 
   const list = rows.filter((t) =>
@@ -100,6 +104,11 @@ export function TicketTable({ rows, fixedApp, apps }: { rows: TicketRow[]; fixed
     (!q || `${t.displayId} ${t.subject} ${t.requester} ${t.category} ${t.subcategory} ${t.item} ${t.appName}`.toLowerCase().includes(q.toLowerCase())));
   const count = (f: (t: TicketRow) => boolean) => String(rows.filter(f).length);
 
+  async function bulk(appId: string) {
+    if (!sel.size) return;
+    const r = await run("tickets.assign", { ids: [...sel], appId: appId === "__auto" ? null : appId }, { success: appId === "__auto" ? `${sel.size} ticket(s) back to automatic matching` : `${sel.size} ticket(s) tagged` });
+    if (r) setSel(new Set());
+  }
   async function reassign(t: TicketRow, appId: string) {
     await run("tickets.assign", { ids: [t.id], appId: appId === "__auto" ? null : appId }, { success: appId === "__auto" ? "Back to automatic matching" : "Ticket linked" });
   }
@@ -119,6 +128,20 @@ export function TicketTable({ rows, fixedApp, apps }: { rows: TicketRow[]; fixed
         <MultiSelect className="w-44" label="Technician" placeholder="All technicians" value={tech} onChange={setTech} options={uniq((t) => t.technician || "Unassigned").map((p) => ({ value: p, label: p, hint: count((t) => (t.technician || "Unassigned") === p) }))} />
         <Button variant="secondary" size="sm" onClick={() => exportTickets(list)} disabled={!list.length}><Download />Export</Button>
       </div>
+      <AnimatePresence>
+        {sel.size > 0 && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="glass sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-2.5 text-sm ring-1 ring-primary/40">
+            <b>{sel.size} selected</b>
+            <span className="text-muted-foreground">Tag to</span>
+            <Select className="h-8 w-60 text-xs" value="" onChange={(e) => e.target.value && void bulk(e.target.value)}>
+              <option value="">Pick an application…</option>
+              <option value="__auto">↺ Automatic matching</option>
+              {apps.filter((a) => me.role === "admin" || editable.has(a.id)).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+            <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>Clear</Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!list.length ? (
         <EmptyState icon={<CheckCircle2 />} title={rows.length ? "No tickets match these filters" : "No tickets yet"} text={rows.length ? "Try All instead of Open, or clear a filter." : fixedApp ? "Tickets whose subject or category mentions this app show up here. Add more words under Edit → Ticket keywords." : undefined} />
@@ -126,15 +149,17 @@ export function TicketTable({ rows, fixedApp, apps }: { rows: TicketRow[]; fixed
         <div className="glass overflow-x-auto rounded-3xl">
           <table className="w-full min-w-[900px] text-sm">
             <thead><tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+              {canBulk && <th className="w-10 px-4 py-3"><input type="checkbox" className="size-4 accent-[var(--primary)]" aria-label="Select all shown" checked={list.slice(0, limit).length > 0 && list.slice(0, limit).every((t) => sel.has(t.id))} onChange={(e) => setSel(e.target.checked ? new Set(list.slice(0, limit).map((t) => t.id)) : new Set())} /></th>}
               {["#", "Subject", ...(fixedApp ? [] : ["Application"]), "Status", "Priority", "Category", "Technician", "Raised"].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}
             </tr></thead>
             <tbody>
               <AnimatePresence initial={false}>
                 {list.slice(0, limit).map((t, i) => (
                   <motion.tr key={t.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ delay: Math.min(i, 20) * 0.015 }} className="border-t border-border align-top hover:bg-muted/30">
+                    {canBulk && <td className="px-4 py-3"><input type="checkbox" className="size-4 accent-[var(--primary)]" aria-label={`Select #${t.displayId}`} checked={sel.has(t.id)} onChange={(e) => setSel((s) => { const n = new Set(s); if (e.target.checked) n.add(t.id); else n.delete(t.id); return n; })} /></td>}
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">{t.url ? <a href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline">#{t.displayId}<ExternalLink className="size-3" /></a> : `#${t.displayId}`}</td>
                     <td className="max-w-md px-4 py-3">
-                      <div className="font-medium">{t.subject}</div>
+                      <button onClick={() => setDetail(t)} className="text-left font-medium hover:text-primary hover:underline">{t.subject}</button>
                       <div className="truncate text-xs text-muted-foreground">{[t.requester, t.requesterDept, t.subcategory, t.item].filter(Boolean).join(" · ")}</div>
                     </td>
                     {!fixedApp && (
@@ -159,6 +184,9 @@ export function TicketTable({ rows, fixedApp, apps }: { rows: TicketRow[]; fixed
               </AnimatePresence>
             </tbody>
           </table>
+          <Drawer open={!!detail} onClose={() => setDetail(null)} title={detail ? `Ticket #${detail.displayId}` : "Ticket"}>
+            {detail && <TicketCard key={detail.id} t={rows.find((r) => r.id === detail.id) ?? detail} apps={apps} defaultOpen />}
+          </Drawer>
           {list.length > limit && <button onClick={() => setLimit((l) => l + 200)} className="w-full border-t border-border py-3 text-sm font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground">Show more ({fmtNumber(list.length - limit)} left)</button>}
         </div>
       )}
@@ -253,4 +281,168 @@ export function TicketImportButton() {
   const [open, setOpen] = React.useState(false);
   if (me.role === "viewer") return null;
   return (<><Button variant="secondary" onClick={() => setOpen(true)}><FileSpreadsheet />Import export</Button><ImportWizard open={open} onClose={() => setOpen(false)} kind="tickets" /></>);
+}
+
+/* ---------------------------------------------------------------- drill-down ---------------------------------------------------------------- */
+
+/** One ticket, expandable to full details + tagging actions (move to app, turn into a rule). */
+export function TicketCard({ t, apps, defaultOpen }: { t: TicketRow; apps: AppSummary[]; defaultOpen?: boolean }) {
+  const me = useMe();
+  const run = useRun();
+  const [open, setOpen] = React.useState(!!defaultOpen);
+  const editable = apps.filter((a) => me.role === "admin" || a.permission === "edit");
+  const canTag = me.role === "admin" || (me.role === "editor" && (!t.appId || editable.some((a) => a.id === t.appId)));
+  // category alone is usually too broad ("Software"), so it is only offered when there is no subcategory / item
+  const ruleFields = (["subcategory", "item", "category"] as const).filter((f) => t[f] && (f !== "category" || (!t.subcategory && !t.item)));
+  const detail: [string, string][] = [
+    ["Category", [t.category, t.subcategory, t.item].filter(Boolean).join(" › ") || "—"], ["Status", t.status], ["Priority", t.priority || "—"],
+    ["Technician", t.technician || "Unassigned"], ["Group", t.group || "—"], ["Requester", [t.requester, t.requesterDept].filter(Boolean).join(" · ") || "—"],
+    ["Site", t.site || "—"], ["Raised", fmtDateTime(t.createdAt)], ["Due by", fmtDateTime(t.dueAt) || "—"], ["Closed", fmtDateTime(t.closedAt) || "—"],
+  ];
+  return (
+    <motion.div layout className={cn("rounded-2xl border border-border transition-colors", open ? "bg-muted/40" : "hover:bg-muted/30")}>
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-3 px-4 py-3 text-left">
+        <span className="mt-0.5 font-mono text-[11px] text-muted-foreground">#{t.displayId}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium leading-snug">{t.subject}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <StatusPill t={t} /><PriorityPill p={t.priority} />
+            {t.appId ? <span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full" style={{ background: toneHex(t.appTone) }} />{t.appName}</span> : <span className="rounded-full bg-muted px-1.5">Unmatched</span>}
+            <span>· {timeAgo(t.createdAt)}</span>{t.technician && <span>· {t.technician}</span>}
+          </span>
+        </span>
+        <motion.span animate={{ rotate: open ? 90 : 0 }} className="mt-1 text-muted-foreground">›</motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="flex flex-col gap-3 px-4 pb-4">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
+                {detail.map(([k, v]) => <div key={k}><dt className="text-muted-foreground">{k}</dt><dd className="font-medium">{v}</dd></div>)}
+              </dl>
+              <div className="flex flex-wrap items-center gap-2">
+                {t.url && <a href={t.url} target="_blank" rel="noreferrer"><Button size="sm" variant="secondary"><ExternalLink />Open in ServiceDesk</Button></a>}
+                {canTag && (
+                  <Select className="h-8 w-60 text-xs" value={t.matchedBy === "manual" ? t.appId ?? "" : ""} onChange={(e) => void run("tickets.assign", { ids: [t.id], appId: e.target.value || null }, { success: e.target.value ? "Ticket tagged" : "Back to automatic matching" })}>
+                    <option value="">{t.appId ? `Tagged: ${t.appName} (${t.matchedBy === "manual" ? "by hand" : t.matchedBy})` : "Tag to an application…"}</option>
+                    {t.matchedBy === "manual" && <option value="">↺ Automatic matching</option>}
+                    {editable.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </Select>
+                )}
+                <span className="text-[11px] text-muted-foreground">{MATCH_LABEL[t.matchedBy]}</span>
+              </div>
+              {me.role === "admin" && t.appId && ruleFields.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <Wand2 className="size-3.5 text-primary" /><span className="text-muted-foreground">Always tag similar tickets to <b className="text-foreground">{t.appName}</b>:</span>
+                  {ruleFields.map((f) => (
+                    <button key={f} onClick={() => void run("tickets.rules.save", { field: f, contains: t[f], appId: t.appId }, { success: `Rule added — ${RULE_LABEL[f]} “${t[f]}” → ${t.appName}` })}
+                      className="rounded-full border border-border px-2 py-0.5 hover:border-primary hover:text-primary">{RULE_LABEL[f]} = “{t[f]}”</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/** Right-hand drawer: tickets for one app, a group of apps, or the unmatched ones. */
+export function TicketDrawer({ target, onClose }: { target: { title: string; appIds: (string | null)[] } | null; onClose: () => void }) {
+  const { data: all } = useTickets();
+  const { data: apps } = useApps();
+  const [state, setState] = React.useState<"open" | "closed" | "all">("open");
+  const [q, setQ] = React.useState("");
+  const [limit, setLimit] = React.useState(60);
+  React.useEffect(() => { setState("open"); setQ(""); setLimit(60); }, [target?.title]);
+  const rows = (all ?? []).filter((t) => target?.appIds.includes(t.appId));
+  const list = rows.filter((t) => (state === "all" || (state === "open" ? t.open : !t.open)) && (!q || `${t.displayId} ${t.subject} ${t.requester} ${t.category} ${t.subcategory}`.toLowerCase().includes(q.toLowerCase())));
+  const single = target && target.appIds.length === 1 && target.appIds[0];
+  const per = React.useMemo(() => {
+    const m = new Map<string, { name: string; tone: number; open: number }>();
+    for (const t of rows) if (t.open && t.appId) { const e = m.get(t.appId) ?? { name: t.appName, tone: t.appTone, open: 0 }; e.open++; m.set(t.appId, e); }
+    return [...m.values()].sort((a, b) => b.open - a.open);
+  }, [rows]);
+  return (
+    <Drawer open={!!target} onClose={onClose} title={target ? `Tickets · ${target.title}` : "Tickets"} wide
+      footer={single ? <Link to={`/apps/${single}/tickets`} onClick={onClose}><Button variant="secondary">Open the app's Tickets tab</Button></Link> : <Link to="/tickets" onClick={onClose}><Button variant="secondary">All tickets</Button></Link>}>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-4 gap-2">
+          {[["Open", rows.filter((t) => t.open).length, "#f59e0b"], ["High / urgent", rows.filter((t) => t.open && isHigh(t.priority)).length, "#f43f5e"], ["Raised 30d", rows.filter((t) => t.createdAt >= new Date(Date.now() - 30 * 864e5).toISOString()).length, "#3b82f6"], ["Total", rows.length, "var(--foreground)"]].map(([l, v, c]) => (
+            <div key={l as string} className="deboss rounded-2xl p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">{l}</div><div className="text-xl font-bold" style={{ color: c as string }}><AnimatedNumber value={v as number} /></div></div>
+          ))}
+        </div>
+        {per.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">{per.map((p) => <span key={p.name} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs"><span className="size-1.5 rounded-full" style={{ background: toneHex(p.tone) }} />{p.name} <b>{p.open}</b></span>)}</div>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Tabs id="tk-drawer" value={state} onChange={setState} tabs={[{ value: "open", label: "Open", count: rows.filter((t) => t.open).length }, { value: "closed", label: "Closed" }, { value: "all", label: "All" }]} />
+          <div className="relative min-w-40 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="pl-9" /></div>
+          <Button size="sm" variant="ghost" onClick={() => exportTickets(list, "tickets")} disabled={!list.length}><Download />Export</Button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {list.slice(0, limit).map((t) => <TicketCard key={t.id} t={t} apps={apps ?? []} />)}
+          {!list.length && <p className="py-10 text-center text-sm text-muted-foreground">{rows.length ? "Nothing here — try Closed or All." : "No tickets linked yet."}</p>}
+          {list.length > limit && <Button variant="ghost" onClick={() => setLimit((l) => l + 100)}>Show more ({list.length - limit})</Button>}
+        </div>
+        <p className="text-[11px] text-muted-foreground">Click a ticket to see its details, tag it to the right application, or turn it into a rule so similar tickets are tagged automatically.</p>
+      </div>
+    </Drawer>
+  );
+}
+
+/** Top of the Applications page: which apps have tickets right now. Click to drill down. */
+export function TicketsOverview({ apps }: { apps: AppSummary[] }) {
+  const { data: all } = useTickets();
+  const { data: status } = useTicketStatus();
+  const [target, setTarget] = React.useState<{ title: string; appIds: (string | null)[] } | null>(null);
+  if (!all || (!all.length && !status?.sync.error)) return null;
+  const visible = new Set(apps.map((a) => a.id));
+  const per = new Map<string | null, { open: number; high: number; total: number }>();
+  for (const t of all) {
+    if (t.appId && !visible.has(t.appId)) continue;
+    const e = per.get(t.appId) ?? { open: 0, high: 0, total: 0 };
+    e.total++; if (t.open) { e.open++; if (isHigh(t.priority)) e.high++; }
+    per.set(t.appId, e);
+  }
+  const cards = apps.filter((a) => per.get(a.id)?.total).sort((a, b) => per.get(b.id)!.open - per.get(a.id)!.open || per.get(b.id)!.total - per.get(a.id)!.total);
+  const un = per.get(null);
+  const openAll = [...per.values()].reduce((s, e) => s + e.open, 0);
+  const highAll = [...per.values()].reduce((s, e) => s + e.high, 0);
+  return (
+    <section className="glass rounded-3xl p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <span className="emboss grid size-9 place-items-center rounded-xl text-amber-500"><TicketIcon className="size-4" /></span>
+        <div className="mr-auto">
+          <div className="font-semibold">Helpdesk tickets by application</div>
+          <div className="text-xs text-muted-foreground"><b className="text-foreground">{fmtNumber(openAll)}</b> open{highAll ? <> · <b className="text-rose-500">{highAll}</b> high / urgent</> : null} · click an app to drill down{status?.sync.error ? <span className="text-rose-500"> · last sync failed</span> : status?.sync.lastOk ? ` · synced ${timeAgo(status.sync.lastOk)}` : ""}</div>
+        </div>
+        <Link to="/tickets"><Button size="sm" variant="secondary">All tickets</Button></Link>
+      </div>
+      <div className="flex gap-2.5 overflow-x-auto pb-1">
+        {cards.map((a, i) => {
+          const e = per.get(a.id)!;
+          const c = e.high ? "#f43f5e" : e.open ? "#f59e0b" : "#10b981";
+          return (
+            <motion.button key={a.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03 }} whileHover={{ y: -3 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setTarget({ title: a.name, appIds: [a.id] })} className="emboss flex w-44 shrink-0 flex-col gap-1 rounded-2xl p-3 text-left">
+              <span className="flex items-center gap-1.5 truncate text-sm font-semibold"><span className="size-2 shrink-0 rounded-full" style={{ background: toneHex(a.tone) }} />{a.name}</span>
+              <span className="text-2xl font-bold tabular-nums" style={{ color: c }}>{e.open}<span className="ml-1 text-xs font-medium text-muted-foreground">open</span></span>
+              <span className="text-[11px] text-muted-foreground">{e.high ? <span className="font-semibold text-rose-500">{e.high} high · </span> : null}{e.total} total</span>
+            </motion.button>
+          );
+        })}
+        {un && un.total > 0 && (
+          <motion.button whileHover={{ y: -3 }} whileTap={{ scale: 0.97 }} onClick={() => setTarget({ title: "Unmatched — tag these", appIds: [null] })} className="flex w-44 shrink-0 flex-col gap-1 rounded-2xl border border-dashed border-border p-3 text-left">
+            <span className="text-sm font-semibold text-muted-foreground">Unmatched</span>
+            <span className="text-2xl font-bold tabular-nums text-muted-foreground">{un.open}<span className="ml-1 text-xs font-medium">open</span></span>
+            <span className="text-[11px] text-muted-foreground">{un.total} total · click to tag</span>
+          </motion.button>
+        )}
+        {!cards.length && !un && <p className="py-3 text-sm text-muted-foreground">No tickets yet — once ServiceDesk Plus syncs, they appear here.</p>}
+      </div>
+      <TicketDrawer target={target} onClose={() => setTarget(null)} />
+    </section>
+  );
 }

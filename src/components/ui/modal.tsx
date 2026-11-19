@@ -55,7 +55,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   );
 }
 
-export function Drawer({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode }) {
+export function Drawer({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
   useEscape(open, onClose);
   return createPortal(
     <AnimatePresence>
@@ -69,7 +69,7 @@ export function Drawer({ open, onClose, title, children, footer }: { open: boole
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 320, damping: 34 }}
-            className="glass absolute inset-y-0 right-0 flex w-full max-w-lg flex-col !rounded-none !bg-popover/95"
+            className={`glass absolute inset-y-0 right-0 flex w-full ${wide ? "max-w-3xl" : "max-w-lg"} flex-col !rounded-none !bg-popover/95`}
           >
             <div className="flex items-center justify-between border-b border-border px-6 py-4">
               <h2 className="text-lg font-semibold">{title}</h2>

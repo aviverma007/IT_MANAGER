@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { AnimatedNumber, ProgressRing, Tabs } from "@/components/ui/bits";
 import { useConfirm } from "@/components/ui/modal";
 import { coverFor } from "@/lib/covers";
+import { TicketDrawer } from "@/components/app/tickets";
+import { Ticket as TicketIcon } from "lucide-react";
 import { cn, fmtNumber } from "@/lib/utils";
 
 type GroupBy = "category" | "hosting" | "source";
@@ -66,7 +68,11 @@ function totals(apps: AppSummary[]) {
   return { seats, active, util: seats ? Math.round((activeOnSeats / seats) * 100) : null, under: withSeats.filter((a) => (a.landscape.utilization ?? 100) < 60).length };
 }
 
-function GroupCard({ title, Icon, tone, apps, index }: { title: string; Icon: typeof Server; tone: string; apps: AppSummary[]; index: number }) {
+type DrillTo = (t: { title: string; appIds: (string | null)[] }) => void;
+function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: string; Icon: typeof Server; tone: string; apps: AppSummary[]; index: number; onTickets: DrillTo }) {
+  const openT = apps.reduce((s, a) => s + (a.tickets?.open ?? 0), 0);
+  const highT = apps.reduce((s, a) => s + (a.tickets?.high ?? 0), 0);
+  const anyT = apps.some((a) => a.tickets?.total);
   const [all, setAll] = React.useState(false);
   const t = totals(apps);
   const sorted = [...apps].sort((a, b) => b.landscape.activeUsers - a.landscape.activeUsers || a.name.localeCompare(b.name));
@@ -82,7 +88,9 @@ function GroupCard({ title, Icon, tone, apps, index }: { title: string; Icon: ty
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-lg font-semibold tracking-tight">{title}</h3>
-          <p className="text-xs text-muted-foreground">{apps.length} app{apps.length === 1 ? "" : "s"} · {fmtNumber(t.active)} active{t.seats ? ` / ${fmtNumber(t.seats)} seats` : ""}</p>
+          <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">{apps.length} app{apps.length === 1 ? "" : "s"} · {fmtNumber(t.active)} active{t.seats ? ` / ${fmtNumber(t.seats)} seats` : ""}
+            {anyT && <button onClick={() => onTickets({ title, appIds: apps.map((a) => a.id) })} className="inline-flex items-center gap-1 rounded-full px-1.5 font-semibold hover:underline" style={{ color: highT ? "#f43f5e" : openT ? "#f59e0b" : "#10b981" }}><TicketIcon className="size-3" />{openT} open ticket{openT === 1 ? "" : "s"}</button>}
+          </p>
         </div>
         {t.util !== null ? <ProgressRing value={Math.min(100, t.util)} size={52} stroke={5} color={utilColor(t.util)} /> : <span className="text-[11px] text-muted-foreground">no seats</span>}
       </header>
@@ -98,6 +106,7 @@ function GroupCard({ title, Icon, tone, apps, index }: { title: string; Icon: ty
                     <span className="flex items-center gap-1.5 truncate text-sm font-medium">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
                     <span className="block truncate text-[11px] text-muted-foreground" title={a.landscape.activeSource === "tracked" ? "From usage tracking (peak day, 30 days)" : a.landscape.activeSource === "manual" ? "Entered on the app" : a.landscape.activeSource === "logged" ? "From usage entries (peak day, 30 days)" : ""}>
                       {fmtNumber(a.landscape.activeUsers)}{a.seats ? ` / ${fmtNumber(a.seats)}` : ""} users{a.landscape.activeSource === "tracked" ? " · tracked" : ""}
+                      {a.tickets?.total ? <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTickets({ title: a.name, appIds: [a.id] }); }} className="ml-1.5 inline-flex items-center gap-0.5 font-semibold hover:underline" style={{ color: a.tickets.high ? "#f43f5e" : a.tickets.open ? "#f59e0b" : "#10b981" }} title="Drill down into this app's tickets"><TicketIcon className="size-3" />{a.tickets.open}</button> : null}
                     </span>
                   </span>
                   <span className="flex items-center gap-1.5">
@@ -130,6 +139,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
   React.useEffect(() => { try { localStorage.setItem("itm.landscape", open ? "1" : "0"); localStorage.setItem("itm.landscapeBy", by); } catch { /* ignore */ } }, [open, by]);
 
   const t = totals(apps);
+  const [drill, setDrill] = React.useState<{ title: string; appIds: (string | null)[] } | null>(null);
   const groups = React.useMemo(() => {
     const m = new Map<string, AppSummary[]>();
     for (const a of apps) { const k = groupKey(a, by); m.set(k, [...(m.get(k) ?? []), a]); }
@@ -181,7 +191,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 <AnimatePresence mode="popLayout">
                   {groups.map(([key, list], i) => (
-                    <GroupCard key={`${by}:${key}`} title={groupLabel(key, by)} Icon={groupIcon(key, by)} tone={GROUP_TONES[i % GROUP_TONES.length]!} apps={list} index={i} />
+                    <GroupCard key={`${by}:${key}`} title={groupLabel(key, by)} Icon={groupIcon(key, by)} tone={GROUP_TONES[i % GROUP_TONES.length]!} apps={list} index={i} onTickets={setDrill} />
                   ))}
                 </AnimatePresence>
               </div>
@@ -193,6 +203,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
           </motion.div>
         )}
       </AnimatePresence>
+      <TicketDrawer target={drill} onClose={() => setDrill(null)} />
     </section>
   );
 }
