@@ -288,12 +288,12 @@ function LogoCard({ a, group, tone, i, onTickets, onPeople }: { a: AppSummary; g
     <>
       <motion.div ref={ref} onMouseEnter={show} onMouseLeave={hide} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 18) * 0.02 }} whileHover={{ y: -5, scale: 1.02 }}
-        className="group relative aspect-square overflow-hidden rounded-3xl bg-white"
-        style={{ boxShadow: `0 0 0 1px color-mix(in oklab, ${tone} 40%, transparent), 0 14px 34px -12px color-mix(in oklab, ${tone} 65%, transparent), 0 0 40px -16px ${tone}` }}>
+        className="group relative aspect-square"
+        style={{ filter: `drop-shadow(0 14px 22px color-mix(in oklab, ${tone} 45%, transparent))` }}>
         <Link to={`/apps/${a.id}`} className="absolute inset-0 block" aria-label={a.name}>
           {a.logo
-            ? <img src={a.logo} alt={a.name} className="absolute inset-[7%] size-[86%] object-contain transition-transform duration-500 group-hover:scale-105" />
-            : <img src={coverFor(a, 600, 600)} alt={a.name} className="absolute inset-0 size-full object-cover object-top" />}
+            ? <img src={a.logo} alt={a.name} className="absolute inset-0 size-full object-contain transition-transform duration-500 group-hover:scale-105" />
+            : <img src={coverFor(a, 600, 600)} alt={a.name} className="absolute inset-0 size-full rounded-3xl object-cover object-top" />}
         </Link>
       </motion.div>
       {pos && createPortal(
