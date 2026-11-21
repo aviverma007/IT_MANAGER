@@ -10,7 +10,7 @@ import { hashPassword, newSalt, newToken, verifyPassword } from "./crypto";
 import { addDays, normalizeDate, nowIso, splitList, toBool, toNumber, uid, ymd } from "./util";
 import { emptyDb, freshDb, sampleDb } from "./seed";
 import { LANDSCAPE, landscapeItemFor } from "./landscape";
-import { detailsFor } from "./details";
+import { detailsFor, RETIRED_DOC_TITLES, RETIRED_TASK_TITLES } from "./details";
 
 export interface Store {
   load(): Promise<DB | null>;
@@ -109,7 +109,7 @@ export class Service {
       }
       // one-time: real details for every app (replaces the sample About text and placeholder dates)
       const adminU = this.db.users.find((u) => u.role === "admin" && u.active);
-      if (adminU && !this.db.logs.some((l) => l.summary.startsWith("Filled application details"))) {
+      if (adminU && !this.db.logs.some((l) => l.summary.startsWith("Filled application details (user view)"))) {
         const r = this.fillDetails({ user: adminU }, "overwrite");
         console.log(`[details] filled ${r.apps} apps (${r.docs} docs, ${r.releases} releases, ${r.tasks} tasks)`);
         await this.persist();
@@ -474,6 +474,24 @@ export class Service {
   fillDetails(ctx: Ctx, mode: "overwrite" | "fill" = "fill") {
     const admin = ctx.user;
     let apps = 0, docs = 0, releases = 0, tasks = 0;
+    if (mode === "overwrite") {
+      // drop the first, technical version of the generated docs / tasks (and headings left empty by that)
+      const oldDocs = new Set(RETIRED_DOC_TITLES.map((t) => t.toLowerCase()));
+      const oldTasks = new Set(RETIRED_TASK_TITLES.map((t) => t.toLowerCase()));
+      // technical notes are not for users: the generated ones and the sample "Technical notes" pages go
+      this.db.docs = this.db.docs.filter((d) => !oldDocs.has(d.title.toLowerCase()) && !(d.kind === "technical" && d.title.toLowerCase() === "technical notes"));
+      // the generic sample "User manual" is replaced by the app's real user guide
+      const guides = new Set(this.db.apps.filter((a) => detailsFor(a)?.docs?.some((x) => x.kind === "manual")).map((a) => a.id));
+      this.db.docs = this.db.docs.filter((d) => !(guides.has(d.appId) && d.title === "User manual"));
+      this.db.tasks = this.db.tasks.filter((t) => !oldTasks.has(t.title.toLowerCase()));
+      const oldGroups = new Set(["go-live", "enhancements from 06-nov review", "open items", "uat", "rebuild"]);
+      this.db.groups = this.db.groups.filter((g) => !oldGroups.has(g.title.toLowerCase()) || this.db.tasks.some((t) => t.groupId === g.id));
+      for (const r of this.db.releases) {
+        const d = detailsFor(this.db.apps.find((a) => a.id === r.appId) ?? { name: "", code: "" });
+        const fresh = d?.releases?.find((x) => x.version === r.version);
+        if (fresh) { r.title = fresh.title; r.notes = fresh.notes; }
+      }
+    }
     for (const app of this.db.apps) {
       const d = detailsFor(app);
       if (!d) continue;
@@ -503,7 +521,8 @@ export class Service {
       for (const e of d.environments ?? []) if (e.url && !app.environments.some((x) => x.url === e.url)) app.environments.push(e);
       if (app.source !== "vendor" && !app.ownerId) app.ownerId = admin.id;
       for (const doc of d.docs ?? []) {
-        if (this.db.docs.some((x) => x.appId === app.id && x.title.toLowerCase() === doc.title.toLowerCase())) continue;
+        const existing = this.db.docs.find((x) => x.appId === app.id && x.title.toLowerCase() === doc.title.toLowerCase());
+        if (existing) { if (mode === "overwrite") { existing.content = doc.content; existing.kind = doc.kind; existing.updatedAt = nowIso(); } continue; }
         this.db.docs.push({ id: uid(), appId: app.id, kind: doc.kind, title: doc.title, content: doc.content, order: this.db.docs.filter((x) => x.appId === app.id).length, updatedAt: nowIso(), updatedBy: admin.name });
         docs++;
       }
@@ -523,7 +542,7 @@ export class Service {
       }
       this.touch(app);
     }
-    this.log(ctx, "update", "app", null, null, `Filled application details: ${apps} apps, ${docs} docs, ${releases} releases, ${tasks} tasks`);
+    this.log(ctx, "update", "app", null, null, `Filled application details (user view): ${apps} apps, ${docs} docs, ${releases} releases, ${tasks} tasks`);
     return { apps, docs, releases, tasks };
   }
 
