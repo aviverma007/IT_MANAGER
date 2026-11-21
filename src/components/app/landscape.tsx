@@ -2,13 +2,14 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  Banknote, Bot, Boxes, Briefcase, Building2, ChevronDown, Cloud, Code2, Gauge, HardDrive, Headphones, LayoutGrid, Megaphone, Monitor, PieChart, Server, ShieldCheck, Users, Wrench,
+  Banknote, Bot, Boxes, Briefcase, Building2, ChevronDown, Cloud, Code2, Gauge, HardDrive, Headphones, LayoutGrid, LayoutList, Rows3, Search, ExternalLink, Megaphone, Monitor, PieChart, Server, ShieldCheck, Users, Wrench,
 } from "lucide-react";
 import type { AppSummary } from "@/core/types";
 import { useMe } from "@/lib/auth";
 import { useRun } from "@/api/hooks";
 import { Button } from "@/components/ui/button";
-import { AnimatedNumber, ProgressRing, Tabs } from "@/components/ui/bits";
+import { AnimatedNumber, ProgressRing, StatusBadge, Tabs } from "@/components/ui/bits";
+import { openApp } from "@/lib/launch";
 import { useConfirm } from "@/components/ui/modal";
 import { coverFor } from "@/lib/covers";
 import { TicketDrawer, TicketHoverChip } from "@/components/app/tickets";
@@ -138,7 +139,8 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
   const confirm = useConfirm();
   const [open, setOpen] = React.useState(() => { try { return localStorage.getItem("itm.landscape") !== "0"; } catch { return true; } });
   const [by, setBy] = React.useState<GroupBy>(() => { try { return (localStorage.getItem("itm.landscapeBy") as GroupBy) || "category"; } catch { return "category"; } });
-  React.useEffect(() => { try { localStorage.setItem("itm.landscape", open ? "1" : "0"); localStorage.setItem("itm.landscapeBy", by); } catch { /* ignore */ } }, [open, by]);
+  const [layout, setLayout] = React.useState<"groups" | "cards">(() => { try { return (localStorage.getItem("itm.landscapeLayout") as "groups" | "cards") || "groups"; } catch { return "groups"; } });
+  React.useEffect(() => { try { localStorage.setItem("itm.landscape", open ? "1" : "0"); localStorage.setItem("itm.landscapeBy", by); localStorage.setItem("itm.landscapeLayout", layout); } catch { /* ignore */ } }, [open, by, layout]);
 
   const t = totals(apps);
   const [drill, setDrill] = React.useState<{ title: string; appIds: (string | null)[] } | null>(null);
@@ -161,7 +163,20 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
           <motion.span animate={{ rotate: open ? 0 : -90 }} className="emboss grid size-8 place-items-center rounded-xl"><ChevronDown className="size-4" /></motion.span>
           <span><span className="block text-lg font-semibold tracking-tight">Application landscape</span><span className="block text-xs text-muted-foreground">Users, licensed seats, % of seats in use and open tickets — by group</span></span>
         </button>
-        {open && <Tabs id="landscape-by" className="ml-auto" value={by} onChange={setBy} tabs={[{ value: "category", label: "By category", icon: <LayoutGrid /> }, { value: "hosting", label: "On-prem / Cloud", icon: <Server /> }, { value: "source", label: "In-house / Vendor", icon: <Code2 /> }]} />}
+        {open && (
+          <motion.button onClick={() => setLayout((l) => (l === "groups" ? "cards" : "groups"))} whileTap={{ scale: 0.95 }} title="Switch between group cards and one card per application"
+            className="emboss ml-auto inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium">
+            <span className="relative grid size-5 place-items-center">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span key={layout} initial={{ rotate: -90, opacity: 0, scale: 0.6 }} animate={{ rotate: 0, opacity: 1, scale: 1 }} exit={{ rotate: 90, opacity: 0, scale: 0.6 }} className="absolute">
+                  {layout === "groups" ? <LayoutList className="size-4" /> : <Rows3 className="size-4" />}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+            {layout === "groups" ? "Show every app as a card" : "Show grouped"}
+          </motion.button>
+        )}
+        {open && <Tabs id="landscape-by" value={by} onChange={setBy} tabs={[{ value: "category", label: "By category", icon: <LayoutGrid /> }, { value: "hosting", label: "On-prem / Cloud", icon: <Server /> }, { value: "source", label: "In-house / Vendor", icon: <Code2 /> }]} />}
       </div>
 
       <AnimatePresence initial={false}>
@@ -190,13 +205,15 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
                 </div>
               )}
 
-              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                <AnimatePresence mode="popLayout">
-                  {groups.map(([key, list], i) => (
-                    <GroupCard key={`${by}:${key}`} title={groupLabel(key, by)} Icon={groupIcon(key, by)} tone={GROUP_TONES[i % GROUP_TONES.length]!} apps={list} index={i} onTickets={setDrill} />
-                  ))}
-                </AnimatePresence>
-              </div>
+              {layout === "cards" ? <AppCardsGrid groups={groups} by={by} onTickets={setDrill} /> : (
+                <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                  <AnimatePresence mode="popLayout">
+                    {groups.map(([key, list], i) => (
+                      <GroupCard key={`${by}:${key}`} title={groupLabel(key, by)} Icon={groupIcon(key, by)} tone={GROUP_TONES[i % GROUP_TONES.length]!} apps={list} index={i} onTickets={setDrill} />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 <b>Seats used %</b> = active users ÷ licensed seats (e.g. 96 of 120 licences in use = 80%). <span style={{ color: "#10b981" }}>■</span> ≥85% healthy · <span style={{ color: "#3b82f6" }}>■</span> 60–84% OK · <span style={{ color: "#f59e0b" }}>■</span> 45–59% under-used · <span style={{ color: "#f43f5e" }}>■</span> &lt;45% review seats.
                 Active users come from the tracking script (busiest day in the last 30 days) where it's installed, otherwise the figure entered on the app, otherwise logged usage entries.
@@ -207,6 +224,67 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
       </AnimatePresence>
       <TicketDrawer target={drill} onClose={() => setDrill(null)} />
     </section>
+  );
+}
+
+/** Cards layout: every application gets its own card, listed one after another (in the current grouping order). */
+function AppCardsGrid({ groups, by, onTickets }: { groups: [string, AppSummary[]][]; by: GroupBy; onTickets: DrillTo }) {
+  const openPeople = useOpenPeople();
+  const [q, setQ] = React.useState("");
+  const [sort, setSort] = React.useState<"group" | "name" | "users" | "util" | "tickets">("group");
+  const rows = groups.flatMap(([key, list], gi) => [...list].sort((a, b) => a.name.localeCompare(b.name)).map((a) => ({ a, group: groupLabel(key, by), tone: GROUP_TONES[gi % GROUP_TONES.length]! })));
+  const shown = rows
+    .filter(({ a, group }) => !q || `${a.name} ${a.vendor} ${a.category} ${group}`.toLowerCase().includes(q.toLowerCase()))
+    .sort((x, y) => sort === "name" ? x.a.name.localeCompare(y.a.name)
+      : sort === "users" ? y.a.landscape.activeUsers - x.a.landscape.activeUsers
+        : sort === "util" ? (y.a.landscape.utilization ?? -1) - (x.a.landscape.utilization ?? -1)
+          : sort === "tickets" ? (y.a.tickets?.open ?? 0) - (x.a.tickets?.open ?? 0) : 0);
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-52 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an application…" className="deboss h-10 w-full rounded-2xl bg-transparent pl-9 pr-3 text-sm outline-none" /></div>
+        <Tabs id="landscape-cards-sort" value={sort} onChange={setSort} tabs={[{ value: "group", label: "By group" }, { value: "name", label: "A–Z" }, { value: "users", label: "Most users" }, { value: "util", label: "Seats used %" }, { value: "tickets", label: "Open tickets" }]} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <AnimatePresence mode="popLayout">
+          {shown.map(({ a, group, tone }, i) => {
+            const u = a.landscape.utilization;
+            return (
+              <motion.div key={a.id} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 16) * 0.02 }}
+                className="glass group relative flex flex-col overflow-hidden rounded-3xl">
+                <Link to={`/apps/${a.id}`} className="relative block h-28 overflow-hidden">
+                  <img src={coverFor(a, 640, 280)} alt="" className="size-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
+                  <span className="absolute inset-0 bg-gradient-to-t from-[var(--card)] via-transparent to-transparent" />
+                  <span className="absolute left-3 top-3 flex gap-1.5"><StatusBadge status={a.status} className="!bg-background/85 backdrop-blur-md" /></span>
+                  <span className="absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow" style={{ background: tone }}>{group}</span>
+                </Link>
+                <div className="flex flex-1 flex-col gap-2 p-4 pt-2">
+                  <div className="flex items-start gap-2">
+                    <Link to={`/apps/${a.id}`} className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5 truncate text-base font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span>
+                    </Link>
+                    <UsageTag app={a} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="deboss h-2 flex-1 overflow-hidden rounded-full"><motion.span className="block h-full rounded-full" style={{ background: utilColor(u) }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} /></span>
+                    <span className="text-sm font-bold tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</span>
+                    <span className="text-[10px] text-muted-foreground">seats used</span>
+                  </div>
+                  <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                    <PeopleChip app={a} big onOpen={() => openPeople(a)} />
+                    {a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : null}
+                    {a.url && <button onClick={() => openApp(a)} className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary" title={a.url}><ExternalLink className="size-3.5" />Open</button>}
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+      {!shown.length && <p className="py-8 text-center text-sm text-muted-foreground">No application matches “{q}”.</p>}
+    </div>
   );
 }
 
