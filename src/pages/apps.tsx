@@ -269,8 +269,6 @@ export default function AppsPage() {
         </div>
       </div>
 
-      <TicketsOverview apps={apps ?? []} />
-
       <Landscape apps={list} allApps={apps ?? []} />
 
       <div className="glass flex flex-wrap items-center gap-3 rounded-3xl p-3">
@@ -326,6 +324,8 @@ export default function AppsPage() {
           </AnimatePresence>
         </LayoutGroup>
       )}
+
+      <TicketsOverview apps={apps ?? []} />
 
       <AppFormModal open={creating} onClose={() => setCreating(false)} onSaved={(id) => navigate(`/apps/${id}`)} />
       <ImportWizard open={importing} onClose={() => setImporting(false)} kind="apps" />
