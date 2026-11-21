@@ -3,12 +3,12 @@ import { cn } from "@/lib/utils";
 
 type LogoApp = { id: string; name: string; code?: string; tone: number; cover?: string; logo?: string; coverShot?: Parameters<typeof coverFor>[0]["coverShot"] };
 
-/** The app's logo on a white tile everywhere a small app picture is shown; falls back to its screenshot / cover. */
-export function AppLogo({ app, className, pad = "p-[12%]" }: { app: LogoApp; className?: string; pad?: string }) {
+/** The app's logo on its own (no tile, no background) wherever a small app picture is shown; falls back to its screenshot / cover. */
+export function AppLogo({ app, className }: { app: LogoApp; className?: string; pad?: string }) {
   if (app.logo) {
     return (
-      <span className={cn("grid shrink-0 place-items-center overflow-hidden border border-border bg-white shadow-sm", className)}>
-        <img src={app.logo} alt="" className={cn("size-full object-contain", pad)} />
+      <span className={cn("grid shrink-0 place-items-center", className)}>
+        <img src={app.logo} alt="" className="size-full object-contain" />
       </span>
     );
   }

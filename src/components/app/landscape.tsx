@@ -258,7 +258,7 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
                   <motion.tr key={a.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 25) * 0.012 }} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-2.5">
                       <Link to={`/apps/${a.id}`} className="flex items-center gap-3">
-                        <AppLogo app={a} className="size-10 rounded-xl" />
+                        <AppLogo app={a} className="size-12" />
                         <span className="min-w-0"><span className="flex items-center gap-1.5 truncate font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
                           <span className="block truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span></span>
                       </Link>
