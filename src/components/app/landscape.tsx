@@ -115,8 +115,8 @@ function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: strin
           {shown.map((a) => {
             const u = a.landscape.utilization;
             return (
-              <motion.li key={a.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
-                <Link to={`/apps/${a.id}`} className="grid grid-cols-[36px_minmax(0,1fr)_92px] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted/50">
+              <GroupRow key={a.id} a={a} tone={tone}>
+                <Link to={`/apps/${a.id}`} className="grid grid-cols-[36px_minmax(0,1fr)_92px] items-center gap-x-3 gap-y-1 py-2.5 pl-3.5 pr-2.5">
                   <AppLogo app={a} className="size-9 rounded-lg" />
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5 truncate text-[15px] font-semibold">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
@@ -133,7 +133,7 @@ function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: strin
                     <span className="flex justify-end"><UsageTag app={a} /></span>
                   </span>
                 </Link>
-              </motion.li>
+              </GroupRow>
             );
           })}
         </AnimatePresence>
@@ -305,22 +305,38 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
   );
 }
 
+/** Row tint from the logo's main colour (lighter for black / grey logos). */
+function useLogoTint(a: AppSummary, fallback: string) {
+  const logoColor = useLogoColor(a);
+  const c = logoColor ?? fallback;
+  const grey = logoColor ? (() => { const n = parseInt(logoColor.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return Math.max(r, g, b) - Math.min(r, g, b) < 30; })() : false;
+  const k = grey ? 0.45 : 1;
+  return {
+    background: `linear-gradient(90deg, color-mix(in oklab, ${c} ${30 * k}%, var(--card)) 0%, color-mix(in oklab, ${c} ${16 * k}%, var(--card)) 35%, color-mix(in oklab, ${c} ${8 * k}%, var(--card)) 100%)`,
+    boxShadow: `inset 4px 0 0 ${c}, 0 0 0 1px color-mix(in oklab, ${c} 22%, transparent), 0 8px 20px -14px ${c}`,
+  };
+}
+
+/** One application row inside a group card, tinted like its logo. */
+function GroupRow({ a, tone, children }: { a: AppSummary; tone: string; children: React.ReactNode }) {
+  const style = useLogoTint(a, tone);
+  return (
+    <motion.li layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} whileHover={{ x: 3 }} className="mb-1.5 overflow-hidden rounded-xl" style={style}>
+      {children}
+    </motion.li>
+  );
+}
+
 const LIST_COLS = "grid grid-cols-[minmax(250px,2.2fr)_minmax(150px,1.2fr)_96px_minmax(150px,1.2fr)_minmax(230px,1.7fr)_minmax(120px,1fr)_70px] items-center gap-3";
 
 /** One application in the List view — the whole row takes the colour of its logo. */
 function ListRow({ a, group, tone, i, onTickets, onPeople }: { a: AppSummary; group: string; tone: string; i: number; onTickets: DrillTo; onPeople: () => void }) {
-  const logoColor = useLogoColor(a);
-  const c = logoColor ?? tone;
-  const grey = logoColor ? (() => { const n = parseInt(logoColor.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return Math.max(r, g, b) - Math.min(r, g, b) < 30; })() : false;
-  const k = grey ? 0.45 : 1; // black / grey logos get a lighter wash
+  const tint = useLogoTint(a, tone);
   const u = a.landscape.utilization;
   return (
     <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 25) * 0.012 }} whileHover={{ x: 3 }}
       className={cn(LIST_COLS, "relative overflow-hidden rounded-2xl px-4 py-2.5 text-sm")}
-      style={{
-        background: `linear-gradient(90deg, color-mix(in oklab, ${c} ${30 * k}%, var(--card)) 0%, color-mix(in oklab, ${c} ${16 * k}%, var(--card)) 35%, color-mix(in oklab, ${c} ${8 * k}%, var(--card)) 100%)`,
-        boxShadow: `inset 4px 0 0 ${c}, 0 0 0 1px color-mix(in oklab, ${c} 22%, transparent), 0 8px 20px -14px ${c}`,
-      }}>
+      style={tint}>
       <Link to={`/apps/${a.id}`} className="flex min-w-0 items-center gap-3">
         <AppLogo app={a} className="size-12" />
         <span className="min-w-0"><span className="flex items-center gap-1.5 truncate font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
