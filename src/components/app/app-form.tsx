@@ -7,7 +7,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Tabs } from "@/components/ui/bits";
 import { useApps, useRun, useUsers } from "@/api/hooks";
 import { APP_STATUSES, PRIORITIES, type AppSummary, type EnvLink, type Tone } from "@/core/types";
-import { cn, imageToDataUrl, STATUS_META, TONE_HEX } from "@/lib/utils";
+import { cn, imageToDataUrl, readAsDataUrl, STATUS_META, TONE_HEX } from "@/lib/utils";
 import { coverFor } from "@/lib/covers";
 import { toast } from "sonner";
 import { call, CAN_CAPTURE } from "@/api/client";
@@ -16,13 +16,13 @@ import { useQueryClient } from "@tanstack/react-query";
 type Form = {
   name: string; code: string; tagline: string; description: string; category: string; department: string; status: string; priority: string;
   url: string; environments: EnvLink[]; techStack: string; ownerId: string; version: string; startDate: string; goLiveDate: string;
-  tone: Tone; cover: string; visibility: "public" | "restricted"; withTemplate: boolean;
+  tone: Tone; cover: string; logo: string; visibility: "public" | "restricted"; withTemplate: boolean;
   hosting: string; source: "in-house" | "vendor"; vendor: string; seats: string; activeUsersManual: string; ticketKeywords: string;
 };
 
 const blank = (): Form => ({
   name: "", code: "", tagline: "", description: "", category: "", department: "", status: "planning", priority: "medium", url: "",
-  environments: [], techStack: "", ownerId: "", version: "", startDate: new Date().toISOString().slice(0, 10), goLiveDate: "", tone: 1, cover: "",
+  environments: [], techStack: "", ownerId: "", version: "", startDate: new Date().toISOString().slice(0, 10), goLiveDate: "", tone: 1, cover: "", logo: "",
   visibility: "public", withTemplate: true, hosting: "", source: "in-house", vendor: "", seats: "", activeUsersManual: "", ticketKeywords: "",
 });
 
@@ -30,7 +30,7 @@ function fromApp(a: AppSummary): Form {
   return {
     name: a.name, code: a.code, tagline: a.tagline, description: a.description, category: a.category, department: a.department, status: a.status,
     priority: a.priority, url: a.url, environments: a.environments, techStack: a.techStack.join(", "), ownerId: a.ownerId ?? "",
-    version: a.version, startDate: a.startDate, goLiveDate: a.goLiveDate, tone: a.tone, cover: a.cover, visibility: a.visibility, withTemplate: false,
+    version: a.version, startDate: a.startDate, goLiveDate: a.goLiveDate, tone: a.tone, cover: a.cover, logo: a.logo ?? "", visibility: a.visibility, withTemplate: false,
     hosting: a.hosting, source: a.source, vendor: a.vendor, seats: a.seats ? String(a.seats) : "", activeUsersManual: a.activeUsersManual ? String(a.activeUsersManual) : "", ticketKeywords: (a.ticketKeywords ?? []).join(", "),
   };
 }
@@ -44,6 +44,7 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
   const [tab, setTab] = React.useState<"basics" | "links" | "look">("basics");
   const [busy, setBusy] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const logoRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => { if (open) { setForm(app ? fromApp(app) : blank()); setTab("basics"); } }, [open, app]);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -173,6 +174,14 @@ export function AppFormModal({ open, onClose, app, onSaved }: { open: boolean; o
               </div>
             </div>
             <div className="grid content-start gap-5">
+              <Field label="Logo" hint="Shown big on the landscape cards. Vendor logos are fetched automatically by the server; upload one for your own apps (PNG/SVG, square works best).">
+                <div className="flex items-center gap-3">
+                  <span className="deboss grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl">{form.logo ? <img src={form.logo} alt="Logo" className="size-12 object-contain" /> : <ImagePlus className="size-5 text-muted-foreground" />}</span>
+                  <input ref={logoRef} type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) set("logo", f.type === "image/svg+xml" ? await readAsDataUrl(f) : await imageToDataUrl(f, 400, true)); e.target.value = ""; }} />
+                  <Button size="sm" variant="secondary" onClick={() => logoRef.current?.click()}><ImagePlus />{form.logo ? "Replace logo" : "Upload logo"}</Button>
+                  {form.logo && <Button size="sm" variant="ghost" onClick={() => set("logo", "")}>Remove</Button>}
+                </div>
+              </Field>
               <Field label="Accent colour">
                 <div className="flex gap-3">
                   {TONE_HEX.map((hex, i) => (

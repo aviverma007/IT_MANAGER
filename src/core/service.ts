@@ -41,7 +41,7 @@ const MAX_ATTACHMENT = 8 * 1024 * 1024;
 const USER_EDITABLE = ["name", "email", "title", "department", "bio", "avatar", "tone"] as const;
 const APP_FIELDS = [
   "name", "code", "tagline", "description", "category", "department", "status", "priority", "url", "environments",
-  "techStack", "ownerId", "version", "cover", "tone", "startDate", "goLiveDate", "seats", "activeUsersManual", "hosting", "source", "vendor", "ticketKeywords",
+  "techStack", "ownerId", "version", "cover", "tone", "startDate", "goLiveDate", "seats", "activeUsersManual", "hosting", "source", "vendor", "ticketKeywords", "logo",
 ] as const;
 
 function publicUser(u: UserRecord): User {
@@ -126,6 +126,7 @@ export class Service {
       if (a.source === undefined) a.source = "in-house";
       if (a.vendor === undefined) a.vendor = "";
       if (!Array.isArray(a.ticketKeywords)) a.ticketKeywords = [];
+      if (a.logo === undefined) a.logo = "";
       delete (a as { repoUrl?: string }).repoUrl; // repository links are no longer kept
     }
     return out;
@@ -1518,6 +1519,7 @@ export class Service {
     if ("techStack" in p) set("techStack", splitList(p.techStack).slice(0, 20));
     if ("ownerId" in p) set("ownerId", this.db.users.some((u) => u.id === p.ownerId) ? p.ownerId : null);
     if ("cover" in p) set("cover", String(p.cover ?? "").slice(0, 3_000_000));
+    if ("logo" in p) set("logo", String(p.logo ?? "").slice(0, 600_000));
     if ("seats" in p) set("seats", Math.max(0, Math.round(toNumber(p.seats))));
     if ("activeUsersManual" in p) set("activeUsersManual", Math.max(0, Math.round(toNumber(p.activeUsersManual))));
     if ("hosting" in p) { const h = normHosting(p.hosting); if (h !== null) set("hosting", h); }
@@ -1533,7 +1535,7 @@ export class Service {
     const now = nowIso();
     const app: App = {
       id: uid(), name: "", code: "", tagline: "", description: "", category: "Internal tool", department: "", status: "planning", priority: "medium",
-      url: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "", source: "in-house", vendor: "", ticketKeywords: [], tone: ((this.db.apps.length % 5) + 1) as Tone,
+      url: "", environments: [], techStack: [], ownerId: ctx.user.id, version: "", cover: "", logo: "", coverShotId: null, seats: 0, activeUsersManual: 0, hosting: "", source: "in-house", vendor: "", ticketKeywords: [], tone: ((this.db.apps.length % 5) + 1) as Tone,
       startDate: ymd(), goLiveDate: "", visibility: "public", acl: {}, createdAt: now, updatedAt: now, createdBy: ctx.user.id,
     };
     this.applyAppFields(app, p);

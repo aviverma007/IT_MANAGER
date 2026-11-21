@@ -335,9 +335,8 @@ function logoDomain(a: { name: string; url: string }) {
     return h.replace(/^(www|app|login)\./, "");
   } catch { return ""; }
 }
-async function logoCover(a: (typeof service.db.apps)[number]) {
-  const domain = logoDomain(a);
-  if (!domain) return false;
+/** The product logo as a data URL (via Google's favicon service; through Edge when Node can't get out). */
+async function fetchLogo(domain: string) {
   const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=256`;
   let buf: Buffer | null = null, type = "image/png";
   try {
@@ -345,14 +344,16 @@ async function logoCover(a: (typeof service.db.apps)[number]) {
     if (r.ok) { buf = Buffer.from(await r.arrayBuffer()); type = r.headers.get("content-type") || type; }
   } catch { /* no direct internet (company proxy) — try through Edge below */ }
   if (!buf) {
-    // Edge uses the Windows proxy settings, so this works where Node's own requests can't get out
     const ctx = await (await getBrowser()).newContext();
     try {
       const res = await (await ctx.newPage()).goto(src, { timeout: 15_000 });
       if (res?.ok()) { buf = await res.body(); type = res.headers()["content-type"] || type; }
     } finally { await ctx.close(); }
   }
-  if (!buf || buf.length < 400) return false; // nothing, or the generic globe
+  if (!buf || buf.length < 400) return null; // nothing, or the generic globe
+  return { dataUrl: `data:${type};base64,${buf.toString("base64")}`, type, b64: buf.toString("base64") };
+}
+function logoCoverSvg(a: (typeof service.db.apps)[number], logo: { type: string; b64: string }) {
   const tone = TONES[((a.tone || 1) - 1) % 5]!;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${tone}" stop-opacity=".22"/><stop offset="1" stop-color="${tone}" stop-opacity=".06"/></linearGradient>
@@ -360,22 +361,31 @@ async function logoCover(a: (typeof service.db.apps)[number]) {
 <rect width="1280" height="800" fill="#f8fafc"/><rect width="1280" height="800" fill="url(#g)"/>
 <circle cx="1120" cy="120" r="260" fill="${tone}" opacity=".10"/><circle cx="140" cy="720" r="200" fill="${tone}" opacity=".08"/>
 <rect x="490" y="170" width="300" height="300" rx="64" fill="#fff" filter="url(#s)"/>
-<image href="data:${type};base64,${buf.toString("base64")}" x="540" y="220" width="200" height="200" preserveAspectRatio="xMidYMid meet"/>
+<image href="data:${logo.type};base64,${logo.b64}" x="540" y="220" width="200" height="200" preserveAspectRatio="xMidYMid meet"/>
 <text x="640" y="580" text-anchor="middle" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="64" font-weight="700" fill="#0f172a">${xml(a.name)}</text>
 <text x="640" y="640" text-anchor="middle" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="30" fill="#64748b">${xml(a.vendor || a.category || "")}</text></svg>`;
-  a.cover = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
-  return true;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
+/** Every app with a known vendor site gets its logo stored; apps with no screenshot also get a logo cover. */
 async function logoCovers() {
   let n = 0;
   for (const a of service.db.apps) {
-    if (a.cover || service.db.screenshots.some((x) => x.appId === a.id)) continue;
-    try { if (await logoCover(a)) n++; } catch { /* offline or blocked — keep the generated cover */ }
+    const hasShot = service.db.screenshots.some((x) => x.appId === a.id);
+    if (a.logo && (a.cover || hasShot)) continue;
+    const domain = logoDomain(a);
+    if (!domain) continue;
+    try {
+      const logo = await fetchLogo(domain);
+      if (!logo) continue;
+      if (!a.logo) a.logo = logo.dataUrl;
+      if (!a.cover && !hasShot) a.cover = logoCoverSvg(a, logo);
+      n++;
+    } catch { /* offline or blocked — keep what we have */ }
   }
   if (n) {
     await service.persistNow();
-    service.emitChange({ method: "apps.captureAll", userId: "system", userName: "System", appId: null, summary: `Added ${n} logo cover(s)`, at: new Date().toISOString() });
-    console.log(`[capture] added ${n} logo cover(s)`);
+    service.emitChange({ method: "apps.captureAll", userId: "system", userName: "System", appId: null, summary: `Added ${n} logo(s)`, at: new Date().toISOString() });
+    console.log(`[capture] added ${n} logo(s)`);
   }
   return n;
 }

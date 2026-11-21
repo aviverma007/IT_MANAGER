@@ -104,7 +104,7 @@ export async function imageToShot(file: Blob, max = 1920) {
 }
 
 /** Downscale an image file to a JPEG data URL so covers and avatars stay small. */
-export async function imageToDataUrl(file: File, max = 900) {
+export async function imageToDataUrl(file: File, max = 900, png = false) {
   const src = await readAsDataUrl(file);
   const img = new Image();
   img.src = src;
@@ -114,5 +114,5 @@ export async function imageToDataUrl(file: File, max = 900) {
   canvas.width = Math.round(img.width * scale);
   canvas.height = Math.round(img.height * scale);
   canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.86);
+  return png ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.86);
 }

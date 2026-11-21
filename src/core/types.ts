@@ -67,6 +67,8 @@ export interface App {
   ownerId: string | null;
   version: string;
   cover: string;
+  /** the product's logo (data URL) — fetched by the server for vendor apps, or uploaded */
+  logo: string;
   coverShotId: string | null;
   /** Licence / landscape fields */
   seats: number; // licensed seats (0 = not tracked)

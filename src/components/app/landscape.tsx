@@ -275,14 +275,23 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
             const u = a.landscape.utilization;
             return (
               <motion.div key={a.id} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 16) * 0.02 }}
-                className="glass group relative flex flex-col overflow-hidden rounded-3xl">
-                <Link to={`/apps/${a.id}`} className="relative block h-28 overflow-hidden">
-                  <img src={coverFor(a, 640, 280)} alt="" className="size-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
-                  <span className="absolute inset-0 bg-gradient-to-t from-[var(--card)] via-transparent to-transparent" />
-                  <span className="absolute left-3 top-3 flex gap-1.5"><StatusBadge status={a.status} className="!bg-background/85 backdrop-blur-md" /></span>
-                  <span className="absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow" style={{ background: tone }}>{group}</span>
+                whileHover={{ y: -4 }} className="group relative h-80 overflow-hidden rounded-3xl border border-white/30 shadow-[0_20px_45px_-25px_rgb(0_0_0/0.5)] dark:border-white/10">
+                {/* the picture fills the whole card */}
+                <Link to={`/apps/${a.id}`} className="absolute inset-0 block" aria-label={a.name}>
+                  {a.logo ? (
+                    <span className="absolute inset-0 block overflow-hidden" style={{ background: `linear-gradient(150deg, color-mix(in oklab, ${tone} 30%, white), color-mix(in oklab, ${tone} 12%, white))` }}>
+                      <img src={a.logo} alt="" aria-hidden className="absolute inset-0 size-full scale-[1.8] object-cover opacity-45 blur-3xl saturate-150" />
+                      <img src={a.logo} alt="" className="absolute left-1/2 top-[34%] w-[52%] max-w-[180px] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_18px_30px_rgb(0_0_0/0.25)] transition-transform duration-700 group-hover:scale-110" />
+                    </span>
+                  ) : (
+                    <img src={coverFor(a, 800, 900)} alt="" className="absolute inset-0 size-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
+                  )}
+                  <span className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/45" />
                 </Link>
-                <div className="flex flex-1 flex-col gap-2 p-4 pt-2">
+                <span className="pointer-events-none absolute left-3 top-3 flex gap-1.5"><StatusBadge status={a.status} className="!bg-background/85 backdrop-blur-md" /></span>
+                <span className="pointer-events-none absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow" style={{ background: tone }}>{group}</span>
+                {/* frosted panel over the picture */}
+                <div className="absolute inset-x-2.5 bottom-2.5 flex flex-col gap-2 rounded-2xl border border-white/40 bg-background/75 p-3.5 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-background/70">
                   <div className="flex items-start gap-2">
                     <Link to={`/apps/${a.id}`} className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5 truncate text-base font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
@@ -291,11 +300,11 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
                     <UsageTag app={a} />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="deboss h-2 flex-1 overflow-hidden rounded-full"><motion.span className="block h-full rounded-full" style={{ background: utilColor(u) }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} /></span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-foreground/10"><motion.span className="block h-full rounded-full" style={{ background: utilColor(u) }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} /></span>
                     <span className="text-sm font-bold tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</span>
                     <span className="text-[10px] text-muted-foreground">seats used</span>
                   </div>
-                  <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <PeopleChip app={a} big onOpen={() => openPeople(a)} />
                     {a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : null}
                     {a.url && <button onClick={() => openApp(a)} className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary" title={a.url}><ExternalLink className="size-3.5" />Open</button>}
