@@ -237,9 +237,9 @@ ${HELP("PR / NFA reports")}` }],
   },
   {
     names: ["Document Flow"], codes: ["DOC_FLOW"],
-    tagline: "Follow any SAP finance document from start to finish",
-    description: "Document Flow shows how SAP finance documents connect — a customer demand, its receipt, the vendor invoice and the payment — so Finance can follow any transaction end to end and see what each document type means. It's ready and waiting for approval to go live.",
-    department: "Finance", category: "SAP", status: "uat", priority: "medium",
+    tagline: "Know where every physical customer document is",
+    description: "Document Flow tracks every physical customer document — in the storage room or with a named employee. Employees request a file, the storekeeper approves it, a transferrer carries it, and the employee confirms receipt; returns follow the same steps back. A document is locked while it is out, so it can never be with two people at once.",
+    department: "CRM", category: "Operations", status: "uat", priority: "medium",
     tasks: { group: "Go-live", items: [{ title: "Approval to go live", priority: "high" }] },
   },
   {

@@ -9,6 +9,8 @@ import { ApiError, Service, type Store } from "../src/core/service.ts";
 import type { DB } from "../src/core/types.ts";
 import { fetchTickets, sdpConfigured } from "./sdp.ts";
 import { landscapeItemFor } from "../src/core/landscape.ts";
+import { manualFor } from "../src/core/manuals.ts";
+import { buildManual } from "./manual.ts";
 
 // Optional .env next to package.json (ServiceDesk Plus keys etc.) — never committed.
 try { process.loadEnvFile(path.resolve(import.meta.dirname, "../.env")); } catch { /* no .env */ }
@@ -116,6 +118,10 @@ app.get("/api/shot/:id", (req, res) => {
 type Browser = import("playwright-core").Browser;
 let browserPromise: Promise<Browser> | null = null;
 async function getBrowser(): Promise<Browser> {
+  if (browserPromise) {
+    const b = await browserPromise.catch(() => null);
+    if (!b || !b.isConnected()) browserPromise = null; // the browser crashed or was closed — start a fresh one
+  }
   if (!browserPromise) {
     browserPromise = (async () => {
       const { chromium } = await import("playwright-core");
@@ -232,6 +238,43 @@ app.post("/api/apps.captureAll", async (req, res) => {
   } catch (e) {
     fail(res, e);
   }
+});
+
+// Illustrated PDF user manual for an in-house app. The sign-in typed in the dialog is used once and never stored or logged.
+const manualBusy = new Set<string>();
+app.post("/api/manual.build", async (req, res) => {
+  try {
+    const user = service.authenticate(tokenOf(req));
+    if (!user) throw new ApiError(401, "Please sign in again.");
+    const target = service.db.apps.find((a) => a.id === req.body?.appId);
+    if (!target) throw new ApiError(404, "Application not found.");
+    if (service.permission(user, target) !== "edit") throw new ApiError(403, `You have view-only rights on ${target.name}.`);
+    const manual = manualFor(target);
+    if (!manual) throw new ApiError(400, `There's no manual written for ${target.name} yet.`);
+    if (manualBusy.has(target.id)) throw new ApiError(409, `The manual for ${target.name} is already being made.`);
+    manualBusy.add(target.id);
+    try {
+      const login = req.body?.login ? { username: String(req.body.login.username ?? ""), password: String(req.body.login.password ?? "") } : undefined;
+      let built;
+      try { built = await buildManual(await getBrowser(), { app: target, manual, login, logoDataUrl: target.logo.startsWith("data:") ? target.logo : undefined }); }
+      catch (e) { throw new ApiError(502, `Couldn't make the manual: ${(e as Error).message.split("\n")[0]}`); }
+      const saved = service.saveManual(user, target.id, { pdfBase64: built.pdf.toString("base64"), size: built.pdf.length, name: `${target.name} – User manual.pdf`, markdown: built.markdown });
+      await service.persistNow();
+      service.emitChange({ method: "manual.build", userId: user.id, userName: user.name, appId: target.id, summary: `Made the user manual for ${target.name}`, at: new Date().toISOString() });
+      res.json({ ...saved, pictures: built.pictures, missed: built.missed, sections: manual.sections.length });
+    } finally {
+      manualBusy.delete(target.id);
+    }
+  } catch (e) {
+    fail(res, e);
+  }
+});
+app.post("/api/manual.available", (req, res) => {
+  const user = service.authenticate(tokenOf(req));
+  if (!user) return res.status(401).json({ error: "Please sign in again." });
+  const target = service.db.apps.find((a) => a.id === req.body?.appId);
+  const m = target && manualFor(target);
+  res.json({ available: !!m, sections: m?.sections.length ?? 0, needsLogin: !!m?.sections.some((s) => s.title === "Signing in"), loginNote: m?.loginNote ?? "" });
 });
 
 // Server-only: check whether an application's link answers (browsers can't, because of CORS).

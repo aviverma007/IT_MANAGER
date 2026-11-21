@@ -14,6 +14,7 @@ import { cn, download, timeAgo } from "@/lib/utils";
 import { shotSrc } from "@/api/client";
 import { Camera } from "lucide-react";
 import { toast } from "sonner";
+import { ManualPdfCard } from "./manual-pdf";
 
 const KIND_META: Record<DocKind, { label: string; icon: typeof BookOpen }> = {
   manual: { label: "User manual", icon: BookOpen },
@@ -112,6 +113,8 @@ export function DocsTab({ app }: { app: AppDetail }) {
             </div>
           )}
         </GlassCard>
+
+        <ManualPdfCard app={app} />
 
         {toc.length > 0 && !editing && (
           <GlassCard className="sticky top-40 hidden p-4 lg:block">

@@ -114,6 +114,14 @@ export class Service {
         console.log(`[details] filled ${r.apps} apps (${r.docs} docs, ${r.releases} releases, ${r.tasks} tasks)`);
         await this.persist();
       }
+      // one-time: Document Flow is physical document custody, not SAP document mapping
+      const df = this.db.apps.find((a) => a.source !== "vendor" && /document\s*flow/i.test(a.name) && /SAP finance document/i.test(a.description));
+      const dfd = df && detailsFor(df);
+      if (df && dfd) {
+        Object.assign(df, { tagline: dfd.tagline ?? df.tagline, description: dfd.description ?? df.description, department: dfd.department ?? df.department, category: dfd.category ?? df.category });
+        df.updatedAt = new Date().toISOString();
+        await this.persist();
+      }
     }
     else {
       this.db = this.options.seed ? await sampleDb() : await freshDb();
@@ -322,6 +330,32 @@ export class Service {
       shot.source === "capture" ? `Captured a screenshot of ${app.name}${shot.url ? ` from ${shot.url}` : ""}` : `Added a screenshot to ${app.name}${shot.caption ? ` — ${shot.caption}` : ""}`);
     const { dataUrl: _d, ...meta } = shot;
     return meta as ScreenshotMeta;
+  }
+
+  /** Store a generated PDF manual: replaces the app's previous one and keeps a text copy in Docs. */
+  saveManual(user: UserRecord, appId: string, p: { pdfBase64: string; size: number; name: string; markdown: string }) {
+    const ctx = { user };
+    const app = this.app(ctx, appId, "edit");
+    if (p.size > MAX_ATTACHMENT) throw new ApiError(413, "The manual came out larger than 8 MB — try again with fewer pictures.");
+    this.db.attachments = this.db.attachments.filter((f) => !(f.appId === app.id && / – User manual\.pdf$/.test(f.name)));
+    const file: Attachment = {
+      id: uid(), appId: app.id, name: clean(p.name, 200), size: p.size, type: "application/pdf",
+      dataUrl: `data:application/pdf;base64,${p.pdfBase64}`, uploadedAt: nowIso(), uploadedBy: user.name,
+    };
+    this.db.attachments.push(file);
+    const title = "User manual";
+    let doc = this.db.docs.find((d) => d.appId === app.id && d.kind === "manual" && d.title === title);
+    if (!doc) {
+      doc = { id: uid(), appId: app.id, kind: "manual", title, content: "", order: -1, updatedAt: nowIso(), updatedBy: user.name };
+      this.db.docs.push(doc);
+    }
+    doc.content = p.markdown.slice(0, 2_000_000);
+    doc.updatedAt = nowIso();
+    doc.updatedBy = user.name;
+    this.touch(app);
+    this.log(ctx, "create", "file", file.id, app, `Made the PDF user manual for ${app.name}`);
+    const { dataUrl: _d, ...meta } = file;
+    return { file: meta, docId: doc.id };
   }
 
   /** Raw image bytes for the server's /api/shot/:id route (view permission required). */
