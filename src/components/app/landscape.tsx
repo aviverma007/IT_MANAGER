@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { AppLogo, useLogoColor } from "@/components/app/app-logo";
 import { AnimatePresence, motion } from "motion/react";
@@ -257,51 +258,77 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
       ) : (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         <AnimatePresence mode="popLayout">
-          {shown.map(({ a, group, tone }, i) => {
-            const u = a.landscape.utilization;
-            return (
-              <motion.div key={a.id} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 18) * 0.02 }}
-                whileHover={{ y: -5 }} className="group relative aspect-[4/5] overflow-hidden rounded-3xl"
-                style={{ boxShadow: `0 0 0 1px color-mix(in oklab, ${tone} 45%, transparent), 0 14px 34px -10px color-mix(in oklab, ${tone} 70%, transparent), 0 0 46px -14px ${tone}` }}>
-                {/* the picture fills the whole card; the glow / wash follows the department colour */}
-                <Link to={`/apps/${a.id}`} className="absolute inset-0 block" aria-label={a.name}>
-                  {a.logo ? (
-                    <span className="absolute inset-0 block bg-white">
-                      <img src={a.logo} alt="" className="absolute inset-x-[5%] top-[5%] h-[56%] w-[90%] object-contain transition-transform duration-700 group-hover:scale-105" />
-                    </span>
-                  ) : (
-                    <>
-                      <img src={coverFor(a, 700, 880)} alt="" className="absolute inset-0 size-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
-                      <span className="absolute inset-0 mix-blend-soft-light" style={{ background: tone }} />
-                    </>
-                  )}
-                  {/* dark fade at the bottom so the text reads on any picture */}
-                  <span className={cn("absolute inset-x-0 bottom-0 bg-gradient-to-t", a.logo ? "h-[40%] from-black/90 via-black/88 via-80% to-transparent" : "h-3/5 from-black/85 via-black/45 to-transparent")} />
-                </Link>
-                <span className="pointer-events-none absolute left-2.5 top-2.5"><StatusBadge status={a.status} className="!bg-black/45 !text-white backdrop-blur-sm" /></span>
-                <span className="pointer-events-none absolute right-2.5 top-2.5 max-w-[55%] truncate rounded-full px-2 py-0.5 text-[9px] font-semibold text-white shadow" style={{ background: tone }}>{group}</span>
-                {/* name, bar and numbers straight on the picture */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-3.5 text-white">
-                  <span className="flex items-center gap-1.5 truncate text-[15px] font-semibold leading-tight drop-shadow">{a.name}{a.source === "in-house" && <span className="rounded bg-white/20 px-1 text-[9px] font-bold uppercase">IT</span>}</span>
-                  <span className="-mt-1 truncate text-[11px] text-white/70">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20"><motion.span className="block h-full rounded-full" style={{ background: utilColor(u), boxShadow: `0 0 10px ${utilColor(u)}` }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} /></span>
-                    <span className="text-sm font-bold tabular-nums">{u === null ? "—" : `${u}%`}</span>
-                  </span>
-                  <span className="pointer-events-auto flex items-center justify-between gap-1 text-xs tabular-nums">
-                    <button onClick={() => openPeople(a)} className="inline-flex items-center gap-1 rounded-full hover:underline" title="See the list of users"><Users className="size-3.5 text-white/70" /><b>{fmtNumber(a.landscape.activeUsers)}</b><span className="text-white/70">{a.seats ? `/ ${fmtNumber(a.seats)}` : "users"}</span></button>
-                    {a.tickets?.open ? <button onClick={() => onTickets({ title: a.name, appIds: [a.id] })} className="inline-flex items-center gap-1 font-semibold text-amber-300 hover:underline"><TicketIcon className="size-3.5" />{a.tickets.open}</button>
-                      : a.url ? <button onClick={() => openApp(a)} className="inline-flex items-center gap-1 text-white/80 hover:text-white" title={a.url}><ExternalLink className="size-3.5" />Open</button> : null}
-                  </span>
-                </div>
-              </motion.div>
-            );
-          })}
+          {shown.map(({ a, group, tone }, i) => <LogoCard key={a.id} a={a} group={group} tone={tone} i={i} onTickets={onTickets} onPeople={() => openPeople(a)} />)}
         </AnimatePresence>
       </div>
       )}
       {!shown.length && <p className="py-8 text-center text-sm text-muted-foreground">No application matches “{q}”.</p>}
     </div>
+  );
+}
+
+/** Cards view: just the logo, filling the card. Everything else shows in a bubble while you hover it. */
+function LogoCard({ a, group, tone, i, onTickets, onPeople }: { a: AppSummary; group: string; tone: string; i: number; onTickets: DrillTo; onPeople: () => void }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const timer = React.useRef(0);
+  const [pos, setPos] = React.useState<{ x: number; y: number; side: "right" | "left" } | null>(null);
+  const show = () => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r) return;
+      const W = 300, right = r.right + 14 + W < window.innerWidth;
+      setPos({ x: right ? r.right + 14 : r.left - 14 - W, y: Math.min(Math.max(12, r.top + r.height / 2 - 150), window.innerHeight - 320), side: right ? "right" : "left" });
+    }, 120);
+  };
+  const hide = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setPos(null), 160); };
+  React.useEffect(() => () => window.clearTimeout(timer.current), []);
+  const u = a.landscape.utilization;
+  return (
+    <>
+      <motion.div ref={ref} onMouseEnter={show} onMouseLeave={hide} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 18) * 0.02 }} whileHover={{ y: -5, scale: 1.02 }}
+        className="group relative aspect-square overflow-hidden rounded-3xl bg-white"
+        style={{ boxShadow: `0 0 0 1px color-mix(in oklab, ${tone} 40%, transparent), 0 14px 34px -12px color-mix(in oklab, ${tone} 65%, transparent), 0 0 40px -16px ${tone}` }}>
+        <Link to={`/apps/${a.id}`} className="absolute inset-0 block" aria-label={a.name}>
+          {a.logo
+            ? <img src={a.logo} alt={a.name} className="absolute inset-[7%] size-[86%] object-contain transition-transform duration-500 group-hover:scale-105" />
+            : <img src={coverFor(a, 600, 600)} alt={a.name} className="absolute inset-0 size-full object-cover object-top" />}
+        </Link>
+      </motion.div>
+      {pos && createPortal(
+        <motion.div onMouseEnter={() => window.clearTimeout(timer.current)} onMouseLeave={hide}
+          initial={{ opacity: 0, scale: 0.9, x: pos.side === "right" ? -8 : 8 }} animate={{ opacity: 1, scale: 1, x: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28 }}
+          className="fixed z-[60] w-[300px] rounded-[28px] border border-border bg-popover p-4 text-sm text-popover-foreground shadow-2xl"
+          style={{ left: pos.x, top: pos.y, transformOrigin: pos.side === "right" ? "left center" : "right center" }}>
+          {/* little tail pointing at the card */}
+          <span aria-hidden className={cn("absolute top-[140px] size-4 rotate-45 border-border bg-popover", pos.side === "right" ? "-left-2 border-b border-l" : "-right-2 border-r border-t")} />
+          <div className="flex items-center gap-3">
+            <AppLogo app={a} className="size-11" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 truncate text-base font-semibold">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</div>
+              <div className="truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <StatusBadge status={a.status} />
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: tone }}>{group}</span>
+            <UsageTag app={a} />
+          </div>
+          <div className="mt-3">
+            <div className="mb-1 flex items-baseline justify-between text-xs"><span className="text-muted-foreground">Seats used</span><b className="text-base tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</b></div>
+            <div className="h-2 overflow-hidden rounded-full bg-foreground/10"><motion.div className="h-full rounded-full" style={{ background: utilColor(u) }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.7 }} /></div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <PeopleChip app={a} big onOpen={() => { setPos(null); onPeople(); }} />
+            {a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => { setPos(null); onTickets({ title: a.name, appIds: [a.id] }); }} /> : <span className="text-xs text-muted-foreground">No tickets</span>}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <Link to={`/apps/${a.id}`} className="flex-1"><Button size="sm" variant="secondary" className="w-full">App page</Button></Link>
+            {a.url && <Button size="sm" variant="primary" className="flex-1" onClick={() => openApp(a)}><ExternalLink />Open</Button>}
+          </div>
+        </motion.div>, document.body)}
+    </>
   );
 }
 
