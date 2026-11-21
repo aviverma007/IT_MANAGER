@@ -10,7 +10,7 @@ import { hashPassword, newSalt, newToken, verifyPassword } from "./crypto";
 import { addDays, normalizeDate, nowIso, splitList, toBool, toNumber, uid, ymd } from "./util";
 import { emptyDb, freshDb, sampleDb } from "./seed";
 import { LANDSCAPE, landscapeItemFor } from "./landscape";
-import { detailsFor, RETIRED_DOC_TITLES, RETIRED_TASK_TITLES } from "./details";
+import { APP_LINKS, detailsFor, RETIRED_DOC_TITLES, RETIRED_TASK_TITLES } from "./details";
 
 export interface Store {
   load(): Promise<DB | null>;
@@ -114,6 +114,8 @@ export class Service {
         console.log(`[details] filled ${r.apps} apps (${r.docs} docs, ${r.releases} releases, ${r.tasks} tasks)`);
         await this.persist();
       }
+      // every start: make sure each in-house app lists all its pages / APIs (adds missing ones, never removes)
+      if (this.addAppLinks()) await this.persist();
       // one-time: Document Flow is physical document custody, not SAP document mapping
       const df = this.db.apps.find((a) => a.source !== "vendor" && /document\s*flow/i.test(a.name) && /SAP finance document/i.test(a.description));
       const dfd = df && detailsFor(df);
@@ -330,6 +332,35 @@ export class Service {
       shot.source === "capture" ? `Captured a screenshot of ${app.name}${shot.url ? ` from ${shot.url}` : ""}` : `Added a screenshot to ${app.name}${shot.caption ? ` — ${shot.caption}` : ""}`);
     const { dataUrl: _d, ...meta } = shot;
     return meta as ScreenshotMeta;
+  }
+
+  /** Fill each in-house app's extra links (pages and APIs) from APP_LINKS, resolved against the app's own link. */
+  addAppLinks() {
+    const n = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    let added = 0;
+    for (const app of this.db.apps) {
+      if (app.source === "vendor" || !/^https?:\/\//i.test(app.url)) continue;
+      const entry = APP_LINKS.find((e) => e.names.some((x) => n(x) === n(app.name) || n(x) === n(app.code)));
+      if (!entry) continue;
+      const base = new URL(app.url);
+      const have = new Set(app.environments.map((e) => { try { const u = new URL(e.url); return u.pathname + u.search; } catch { return e.url; } }));
+      for (const [label, path] of entry.links) {
+        const url = new URL(path, base.origin + "/").toString();
+        const u = new URL(url);
+        if (have.has(u.pathname + u.search)) {
+          // an existing link for the same page gets its group name (e.g. "NFA TAT report" → "Reports · Live NFA TAT report")
+          const same = app.environments.find((e) => { try { const x = new URL(e.url); return x.pathname + x.search === u.pathname + u.search; } catch { return false; } });
+          if (same && !same.label.includes(" · ")) { same.label = label; added++; }
+          continue;
+        }
+        // the app's main link opens "/" already — skip it unless the app link points elsewhere
+        if (path === "/" && base.pathname === "/" && !base.search) continue;
+        app.environments.push({ label, url });
+        have.add(u.pathname + u.search);
+        added++;
+      }
+    }
+    return added;
   }
 
   /** Store a generated PDF manual: replaces the app's previous one and keeps a text copy in Docs. */

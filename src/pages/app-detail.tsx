@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppLogo } from "@/components/app/app-logo";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import {
-  Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff, Ticket } from "lucide-react";
+  Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff, Ticket } from "lucide-react";
 import { useApp, useRun } from "@/api/hooks";
 import { pingUrl } from "@/api/client";
 import { useMe } from "@/lib/auth";
@@ -18,6 +18,7 @@ import { OverviewTab } from "@/components/app/tabs/overview";
 import { TasksTab } from "@/components/app/tabs/tasks";
 import { UsageTab } from "@/components/app/tabs/usage";
 import { DocsTab } from "@/components/app/tabs/docs";
+import { LinksMenu } from "@/components/app/links-menu";
 import { ReleasesTab } from "@/components/app/tabs/releases";
 import { FilesTab } from "@/components/app/tabs/files";
 import { AccessTab } from "@/components/app/tabs/access";
@@ -110,7 +111,7 @@ export default function AppDetailPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" size="lg" disabled={!app.url} onClick={() => openApp(app)} title={app.url || "Set a link in Edit"}><ExternalLink />{app.url ? "Open app" : "No link yet"}</Button>
-              {app.environments.map((e) => <Button key={e.url} variant="overlay" size="lg" onClick={() => openApp(app, e.url)}><Globe />{e.label || "Link"}</Button>)}
+              <LinksMenu links={app.environments} onOpen={(u) => openApp(app, u)} />
               <Button variant="overlay" size="lg" onClick={() => run("apps.favorite", { id: app.id })} className={cn(app.favorite && "!text-amber-300")} title={app.favorite ? "Unpin" : "Pin to sidebar"} aria-label="Pin"><Star className={cn(app.favorite && "fill-current")} /></Button>
               {canEdit && <Button variant="overlay" size="lg" onClick={() => setEditing(true)}><Edit3 />Edit</Button>}
               {canEdit && me.role !== "viewer" && <Button variant="overlay" size="lg" onClick={remove} className="!text-rose-300 hover:!bg-rose-500/30" title="Delete application" aria-label="Delete"><Trash2 /></Button>}

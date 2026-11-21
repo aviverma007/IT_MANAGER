@@ -346,3 +346,46 @@ export function detailsFor(app: { name: string; code: string; source?: string })
   return APP_DETAILS.find((d) => d.names.some((x) => n(x) === name))
     ?? (app.source !== "vendor" ? APP_DETAILS.find((d) => d.codes?.some((c) => n(c) === n(app.code))) : undefined);
 }
+
+/* ------------------------------------------------------------------ extra links ------------------------------------------------------------------ */
+/** Every page and API an in-house app serves, shown in the app's "More links" menu. Paths are relative to the app's link.
+ *  Labels are "Group · Name". Actions that change data (sync, backfill) are left out on purpose. */
+export const APP_LINKS: { names: string[]; links: [string, string][] }[] = [
+  {
+    names: ["VendorGlobe API Sync", "PR/NFA API Sync", "PR & NFA reports", "VendorGlobe_API"],
+    links: [
+      ["Reports · Live PR report", "/"],
+      ["Reports · Live NFA TAT report", "/nfatat"],
+      ["Reports · Returned PRs (NFA TAT)", "/nfatat/returned"],
+      ["Reports · Live SAP PR report", "/sappr"],
+      ["Reports · Live SAP PO report", "/sappo"],
+      ["Data for SAP · PR data (live from VendorGlobe)", "/api/data"],
+      ["Data for SAP · NFA TAT data (live from VendorGlobe)", "/nfatat/data"],
+      ["Data for SAP · PR OData (PRReportHistory)", "/odata/PRReportHistory"],
+      ["Data for SAP · NFA TAT OData (PRNFATatReportHistory)", "/nfatat/odata/PRNFATatReportHistory"],
+      ["Saved tables · PR table", "/db/pr"],
+      ["Saved tables · NFA TAT table", "/db/nfatat"],
+      ["Saved tables · SAP PR table", "/db/sappr"],
+      ["Saved tables · SAP PO table", "/db/sappo"],
+      ["Dashboard feeds · PR to PO journey", "/pr2po/data"],
+      ["Dashboard feeds · Collections", "/collections/data"],
+      ["Dashboard feeds · SFDC cases", "/sfdc/cases/data"],
+      ["Dashboard feeds · SFDC digital enquiries", "/sfdc/digital/data"],
+      ["Dashboard feeds · SFDC gallery footfall", "/sfdc/footfall/data"],
+      ["Health checks · Service", "/health"],
+      ["Health checks · PR to PO", "/pr2po/health"],
+      ["Health checks · Collections", "/collections/health"],
+      ["Health checks · SFDC cases", "/sfdc/cases/health"],
+      ["Health checks · SFDC digital enquiries", "/sfdc/digital/health"],
+      ["Health checks · SFDC gallery footfall", "/sfdc/footfall/health"],
+    ],
+  },
+  {
+    names: ["MIS Company", "Complaint MIS", "MIS_Copmany"],
+    links: [["Open directly · M3M MIS", "/__gate/select/m3m"], ["Open directly · Smartworld MIS", "/__gate/select/smartworld"], ["Open directly · NBH MIS", "/__gate/select/nbh"]],
+  },
+  {
+    names: ["SmartDesk"],
+    links: [["Screens · Office TV display", "/?tv"]],
+  },
+];
