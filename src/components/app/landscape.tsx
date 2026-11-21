@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
+import { AppLogo } from "@/components/app/app-logo";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Banknote, Bot, Boxes, Briefcase, Building2, ChevronDown, Cloud, Code2, Gauge, HardDrive, Headphones, LayoutGrid, LayoutList, Search, ExternalLink, Megaphone, Monitor, PieChart, Server, ShieldCheck, Users, Wrench,
@@ -116,7 +117,7 @@ function GroupCard({ title, Icon, tone, apps, index, onTickets }: { title: strin
             return (
               <motion.li key={a.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
                 <Link to={`/apps/${a.id}`} className="grid grid-cols-[36px_minmax(0,1fr)_92px] items-center gap-x-3 gap-y-1 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted/50">
-                  <img src={coverFor(a, 80, 80)} alt="" className="size-9 rounded-lg border border-border object-cover object-top" />
+                  <AppLogo app={a} className="size-9 rounded-lg" />
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5 truncate text-[15px] font-semibold">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -257,7 +258,7 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
                   <motion.tr key={a.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 25) * 0.012 }} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-2.5">
                       <Link to={`/apps/${a.id}`} className="flex items-center gap-3">
-                        <img src={coverFor(a, 120, 120)} alt="" className="h-9 w-14 shrink-0 rounded-lg border border-border object-cover object-top" />
+                        <AppLogo app={a} className="size-10 rounded-xl" />
                         <span className="min-w-0"><span className="flex items-center gap-1.5 truncate font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
                           <span className="block truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span></span>
                       </Link>

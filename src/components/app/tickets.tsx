@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { AppLogo } from "@/components/app/app-logo";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import * as XLSX from "xlsx";
@@ -428,7 +429,7 @@ export function TicketsOverview({ apps }: { apps: AppSummary[] }) {
           return (
             <motion.button key={a.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03 }} whileHover={{ y: -3 }} whileTap={{ scale: 0.97 }}
               onClick={() => setTarget({ title: a.name, appIds: [a.id] })} className="emboss flex w-44 shrink-0 flex-col gap-1 rounded-2xl p-3 text-left">
-              <span className="flex items-center gap-1.5 truncate text-sm font-semibold"><span className="size-2 shrink-0 rounded-full" style={{ background: toneHex(a.tone) }} />{a.name}</span>
+              <span className="flex items-center gap-1.5 truncate text-sm font-semibold"><AppLogo app={a} className="size-6 rounded-md" pad="p-[8%]" />{a.name}</span>
               <span className="text-2xl font-bold tabular-nums" style={{ color: c }}>{e.open}<span className="ml-1 text-xs font-medium text-muted-foreground">open</span></span>
               <span className="text-[11px] text-muted-foreground">{e.high ? <span className="font-semibold text-rose-500">{e.high} high · </span> : null}{e.total} total</span>
             </motion.button>

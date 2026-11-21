@@ -1,5 +1,6 @@
 import * as React from "react";
 import { NavLink, useLocation, useNavigate, useOutlet } from "react-router-dom";
+import { AppLogo } from "@/components/app/app-logo";
 import { PeopleDrawerProvider } from "@/components/app/people";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import {
@@ -10,7 +11,6 @@ import { DEMO } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, StatusBadge } from "@/components/ui/bits";
-import { coverFor } from "@/lib/covers";
 import { AppFormModal } from "./app-form";
 import { useLiveSync } from "@/api/live";
 import type { AppStatus } from "@/core/types";
@@ -111,7 +111,7 @@ function Sidebar({ collapsed, setCollapsed, mobile, onNavigate }: { collapsed: b
           <div className="flex flex-col gap-1">
             {favorites.map((a) => (
               <NavLink key={a.id} to={`/apps/${a.id}`} onClick={onNavigate} className={({ isActive }) => cn("flex items-center gap-2.5 rounded-xl px-3 py-1.5 text-sm transition-colors hover:bg-muted/60", isActive ? "text-foreground" : "text-muted-foreground")}>
-                <img src={coverFor(a, 80, 80)} alt="" className="size-6 rounded-lg object-cover" />
+                <AppLogo app={a} className="size-6 rounded-lg" pad="p-[8%]" />
                 <span className="truncate">{a.name}</span>
               </NavLink>
             ))}
@@ -154,7 +154,7 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
     type Item = { key: string; label: string; hint: string; icon: React.ReactNode; go: () => void; status?: AppStatus; text?: string };
     const pages: Item[] = NAV.filter((n) => !n.admin || me.role === "admin").map((n) => ({ key: "p" + n.to, label: n.label, hint: "Page", icon: <n.icon className="size-4" />, go: () => navigate(n.to) }));
     const appItems: Item[] = (apps ?? []).map((a) => ({
-      key: a.id, label: a.name, hint: a.tagline || a.category, icon: <img src={coverFor(a, 60, 60)} alt="" className="size-6 rounded-md" />, go: () => navigate(`/apps/${a.id}`), status: a.status,
+      key: a.id, label: a.name, hint: a.tagline || a.category, icon: <AppLogo app={a} className="size-6 rounded-md" pad="p-[8%]" />, go: () => navigate(`/apps/${a.id}`), status: a.status,
       text: `${a.name} ${a.code} ${a.category} ${a.department} ${a.techStack.join(" ")}`,
     }));
     const all = [...appItems, ...pages];

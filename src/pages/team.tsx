@@ -1,11 +1,12 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
+import { AppLogo } from "@/components/app/app-logo";
 import { motion } from "motion/react";
 import { AppWindow, CheckCircle2, Mail, Settings } from "lucide-react";
 import TeamLanyardRail, { type LanyardMember } from "@/components/ui/team-lanyard-rail";
 import { useApps, useUsers } from "@/api/hooks";
 import { useMe } from "@/lib/auth";
-import { avatarFor, coverFor } from "@/lib/covers";
+import { avatarFor } from "@/lib/covers";
 import { Avatar, GlassCard, Skeleton } from "@/components/ui/bits";
 import { Button } from "@/components/ui/button";
 import { cn, timeAgo } from "@/lib/utils";
@@ -63,7 +64,7 @@ export default function TeamPage() {
                 </div>
                 <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><AppWindow className="size-3.5" />{owned.length} owned</div>
                 <div className="mt-2 flex -space-x-2">
-                  {owned.slice(0, 6).map((a) => <Link key={a.id} to={`/apps/${a.id}`} title={a.name}><img src={coverFor(a, 60, 60)} alt="" className="size-8 rounded-lg border-2 border-background object-cover transition-transform hover:z-10 hover:scale-125" /></Link>)}
+                  {owned.slice(0, 6).map((a) => <Link key={a.id} to={`/apps/${a.id}`} title={a.name}><AppLogo app={a} className="size-8 rounded-lg transition-transform hover:z-10 hover:scale-125" pad="p-[10%]" /></Link>)}
                 </div>
                 {u.email && <a href={`mailto:${u.email}`} className="mt-4 flex items-center gap-1.5 truncate text-xs text-muted-foreground hover:text-foreground"><Mail className="size-3.5" />{u.email}</a>}
                 {owned.length > 0 && <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><CheckCircle2 className="size-3.5 text-emerald-500" />{Math.round(owned.reduce((s, a) => s + a.progress, 0) / owned.length)}% average progress</div>}

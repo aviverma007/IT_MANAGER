@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { AppLogo, AppHero } from "@/components/app/app-logo";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import * as XLSX from "xlsx";
 import {
@@ -14,7 +15,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { Chip, EmptyState, ProgressBar, ProgressRing, Skeleton, Sparkline, StatusBadge, Tabs, TiltCard } from "@/components/ui/bits";
 import { AppFormModal } from "@/components/app/app-form";
 import { ImportWizard } from "@/components/app/import-wizard";
-import { coverFor, hasRealCover } from "@/lib/covers";
+import { hasRealCover } from "@/lib/covers";
 import { call, CAN_CAPTURE } from "@/api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -57,8 +58,8 @@ function AppCard({ app, index }: { app: AppSummary; index: number }) {
       transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(index, 12) * 0.035 }}>
       <TiltCard intensity={6} className="flex h-full cursor-pointer flex-col overflow-hidden" onClick={() => navigate(`/apps/${app.id}`)}>
         <div className="relative h-40 overflow-hidden">
-          <motion.img layoutId={`cover-${app.id}`} src={coverFor(app, 640, 360)} alt="" className="size-full object-cover object-top transition-transform duration-700 group-hover/tilt:scale-110" />
-          {!hasRealCover(app) && app.permission === "edit" && (
+          <AppHero app={app} tone={toneHex(app.tone)} />
+          {!hasRealCover(app) && !app.logo && app.permission === "edit" && (
             <button onClick={(e) => { e.stopPropagation(); navigate(`/apps/${app.id}/screens`); }} className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md hover:bg-black/60">
               <Camera className="size-3" />Add real screenshot
             </button>
@@ -99,7 +100,7 @@ function AppRow({ app, index }: { app: AppSummary; index: number }) {
     <motion.tr layout initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ delay: Math.min(index, 15) * 0.025 }} className="group border-t border-border hover:bg-muted/30">
       <td className="px-4 py-3">
         <Link to={`/apps/${app.id}`} className="flex items-center gap-3">
-          <motion.img layoutId={`cover-${app.id}`} src={coverFor(app, 120, 120)} alt="" className="h-10 w-16 rounded-lg border border-border object-cover object-top" />
+          <AppLogo app={app} className="size-11 rounded-xl" />
           <div className="min-w-0"><div className="truncate font-semibold group-hover:underline">{app.name}</div><div className="truncate text-xs text-muted-foreground">{app.code} · {app.category}</div></div>
         </Link>
       </td>
@@ -171,7 +172,7 @@ function BoardColumn({ status, apps, list, over, setOver }: { status: AppStatus;
                 <Link to={`/apps/${a.id}`} draggable={a.permission === "edit"} onDragStart={(e) => e.dataTransfer.setData("text/app", a.id)}
                   className="emboss block cursor-grab rounded-2xl border border-border p-3 active:cursor-grabbing">
                   <div className="flex items-center gap-2.5">
-                    <img src={coverFor(a, 80, 80)} alt="" className="h-8 w-12 rounded-md border border-border object-cover object-top" />
+                    <AppLogo app={a} className="size-9 rounded-lg" />
                     <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{a.name}</div><div className="truncate text-[11px] text-muted-foreground">{a.vendor || a.ownerName || a.department}</div></div>
                   </div>
                   {a.tasksTotal > 0 && <div className="mt-2.5 flex items-center gap-2"><ProgressBar value={a.progress} color={toneHex(a.tone)} className="h-1.5" /><span className="text-[11px] tabular-nums text-muted-foreground">{a.progress}%</span></div>}

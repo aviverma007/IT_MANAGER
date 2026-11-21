@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useOpenPeople } from "@/components/app/people";
+import { AppLogo } from "@/components/app/app-logo";
 import { ChevronLeft, ChevronRight, UsersRound } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
@@ -102,7 +103,7 @@ export default function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {apps.filter((a) => a.favorite).map((a) => (
               <motion.button key={a.id} whileHover={{ y: -4 }} whileTap={{ scale: 0.97 }} onClick={() => (a.url ? openApp(a) : navigate(`/apps/${a.id}`))} className="glass flex items-center gap-3 rounded-2xl p-3 text-left">
-                <img src={coverFor(a, 120, 120)} alt="" className="h-11 w-16 rounded-xl border border-border object-cover object-top" />
+                <AppLogo app={a} className="size-11 rounded-xl" />
                 <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{a.name}</div><StatusBadge status={a.status} className="mt-1" /></div>
                 {a.url ? <ExternalLink className="size-4 text-muted-foreground" /> : <ArrowRight className="size-4 text-muted-foreground" />}
               </motion.button>
@@ -260,7 +261,7 @@ function AppTicker({ apps }: { apps: AppSummary[] }) {
             const u = a.landscape.utilization;
             return (
               <button key={`${a.id}-${i}`} onClick={() => navigate(`/apps/${a.id}`)} className="flex items-center gap-3 rounded-2xl bg-background/70 p-2.5 text-left shadow-sm transition-transform hover:scale-[1.02]">
-                <img src={coverFor(a, 120, 120)} alt="" className="size-10 shrink-0 rounded-xl border border-border object-cover object-top" />
+                <AppLogo app={a} className="size-10 rounded-xl" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5 truncate text-sm font-semibold"><span className="size-1.5 shrink-0 rounded-full" style={{ background: STATUS_HEX[a.status] }} />{a.name}</span>
                   <span className="block truncate text-[11px] text-muted-foreground">{fmtNumber(a.landscape.activeUsers)}{a.seats ? ` / ${fmtNumber(a.seats)}` : ""} users{a.tickets?.open ? ` · ${a.tickets.open} open tickets` : ""}</span>
@@ -495,7 +496,8 @@ function WallRail({ list }: { list: AppSummary[] }) {
   const [active, setActive] = React.useState<number | null>(null);
   const prints: PictureRailItem[] = React.useMemo(() => list.map((a, i) => ({
     id: a.id, title: a.name, artist: a.vendor || a.ownerName || a.department, year: a.version ? `v${a.version}` : STATUS_META[a.status].label,
-    image: coverFor(a, 800, 1000), aspect: a.coverShot ? Math.min(1.9, Math.max(0.55, a.coverShot.width / a.coverShot.height)) : a.cover ? 1.6 : i % 3 === 1 ? 1 : 0.8,
+    image: a.logo || coverFor(a, 800, 1000), fit: a.logo ? "contain" as const : undefined,
+    aspect: a.logo ? (i % 3 === 1 ? 1 : 0.85) : a.coverShot ? Math.min(1.9, Math.max(0.55, a.coverShot.width / a.coverShot.height)) : a.cover ? 1.6 : i % 3 === 1 ? 1 : 0.8,
     frame: FRAME_CYCLE[i % 3], mat: i % 2 === 0, drop: [0.04, 0.12, -0.02, 0.16, 0.06, 0, 0.1, 0.03][i % 8] ?? 0,
     tag: a.landscape.utilization !== null ? `${a.landscape.utilization}% seats` : a.tasksTotal ? `${a.progress}%` : STATUS_META[a.status].label,
     details: [STATUS_META[a.status].label, a.category, `${fmtNumber(a.landscape.activeUsers)}${a.seats ? ` / ${fmtNumber(a.seats)}` : ""} users`, a.tickets?.open ? `${a.tickets.open} open tickets` : `${a.tasksDone}/${a.tasksTotal} tasks done`],

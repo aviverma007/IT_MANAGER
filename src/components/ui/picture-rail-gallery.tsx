@@ -25,6 +25,8 @@ export interface PictureRailItem {
   tag?: string;
   /** Lines printed on the gallery label on the back: edition, size, medium… */
   details?: string[];
+  /** "contain" shows the whole picture (logos) on a white board instead of filling the frame. */
+  fit?: "cover" | "contain";
 }
 
 export interface PictureRailGalleryLabels {
@@ -946,7 +948,8 @@ function FrameArt({ item, shape, unit, lit, lightRef, glareRef, dimRef }: {
               ref={(node) => { if (node?.complete && node.naturalWidth > 0) node.dataset.loaded = "true"; }}
               onLoad={(event) => { event.currentTarget.dataset.loaded = "true"; }}
               onError={(event) => { event.currentTarget.dataset.failed = "true"; }}
-              className="pointer-events-none absolute inset-0 size-full select-none object-cover opacity-0 transition-opacity duration-500 data-[failed]:hidden data-[loaded]:opacity-100 motion-reduce:transition-none"
+              style={item.fit === "contain" ? { background: "white", padding: "16%" } : undefined}
+              className="pointer-events-none absolute inset-0 size-full select-none object-cover opacity-0 [&[style]]:object-contain transition-opacity duration-500 data-[failed]:hidden data-[loaded]:opacity-100 motion-reduce:transition-none"
             />
           </span>
           <span aria-hidden="true" className="pointer-events-none absolute inset-0 block" style={{ boxShadow: `inset 0 ${(m * 0.45).toFixed(1)}px ${(m * 0.9).toFixed(1)}px color-mix(in oklab, black 30%, transparent), inset ${(m * 0.2).toFixed(1)}px 0 ${(m * 0.5).toFixed(1)}px color-mix(in oklab, black 12%, transparent), inset 0 0 0 0.5px color-mix(in oklab, black 45%, transparent)` }} />

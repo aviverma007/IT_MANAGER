@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { AppLogo } from "@/components/app/app-logo";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import {
   Camera, Activity, ArrowLeft, BookOpen, CheckSquare, Edit3, ExternalLink, FileBox, Globe, LayoutDashboard, Lock, Rocket, Shield, Star, Tag, Trash2, Wifi, WifiOff, Ticket } from "lucide-react";
@@ -98,7 +99,7 @@ export default function AppDetailPage() {
               <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] backdrop-blur-md">{canEdit ? "You can edit" : "View only"}</span>
               <Health appId={app.id} url={app.url} />
             </motion.div>
-            <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="text-4xl font-bold tracking-tight md:text-5xl">{app.name}</motion.h1>
+            <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="flex items-center gap-4 text-4xl font-bold tracking-tight md:text-5xl">{app.logo && <AppLogo app={app} className="size-14 rounded-2xl md:size-16" />}{app.name}</motion.h1>
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }} className="mt-2 max-w-2xl text-white/75">{app.tagline || app.description}</motion.p>
             <div className="mt-4 flex flex-wrap gap-1.5">{app.techStack.map((t) => <Chip key={t} className="border-white/15 bg-white/10 text-white/80 backdrop-blur-md">{t}</Chip>)}</div>
           </div>
