@@ -69,6 +69,8 @@ export interface App {
   cover: string;
   /** the product's logo (data URL) — fetched by the server for vendor apps, or uploaded */
   logo: string;
+  /** where the logo came from: a file in server/logos, an upload in the form, or fetched from the web */
+  logoSource?: "file" | "upload" | "web" | "";
   coverShotId: string | null;
   /** Licence / landscape fields */
   seats: number; // licensed seats (0 = not tracked)

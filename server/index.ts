@@ -379,6 +379,7 @@ function logoCoverSvg(a: (typeof service.db.apps)[number], logo: { type: string;
 }
 /** Every app with a known vendor site gets its logo stored; apps with no screenshot also get a logo cover. */
 async function logoCovers() {
+  if (!LOGO_FETCH) return 0;
   let n = 0;
   for (const a of service.db.apps) {
     const hasShot = service.db.screenshots.some((x) => x.appId === a.id);
@@ -388,7 +389,7 @@ async function logoCovers() {
     try {
       const logo = await fetchLogo(domain);
       if (!logo) continue;
-      if (!a.logo) a.logo = logo.dataUrl;
+      if (!a.logo) { a.logo = logo.dataUrl; a.logoSource = "web"; }
       if (!a.cover && !hasShot) a.cover = logoCoverSvg(a, logo);
       n++;
     } catch { /* offline or blocked — keep what we have */ }
@@ -407,6 +408,8 @@ async function logoCovers() {
 const LOGO_DIR = path.resolve(process.env.LOGO_DIR ?? path.join(import.meta.dirname, "logos"));
 const LOGO_TYPES: Record<string, string> = { ".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
 const logoSeen = new Map<string, number>();
+/** LOGO_FETCH=true lets the server also download logos from the web for apps without a file; off by default. */
+const LOGO_FETCH = process.env.LOGO_FETCH === "true";
 async function loadLogoFiles() {
   if (!fs.existsSync(LOGO_DIR)) return 0;
   const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -425,8 +428,16 @@ async function loadLogoFiles() {
     logoSeen.set(file, mtime);
     const data = `data:${type};base64,${(await fs.promises.readFile(full)).toString("base64")}`;
     if (app.logo !== data) { app.logo = data; n++; }
+    app.logoSource = "file";
   }
   if (unmatched.length) console.log(`[logos] no application named like: ${unmatched.join(", ")}`);
+  if (!LOGO_FETCH) {
+    // only logos from server/logos (or uploaded in the form) are used — drop anything fetched from the web earlier
+    for (const a of service.db.apps) {
+      if (a.logo && a.logoSource !== "file" && a.logoSource !== "upload") { a.logo = ""; a.logoSource = ""; n++; }
+      if (a.cover.startsWith("data:image/svg+xml;base64,")) { a.cover = ""; n++; } // logo covers made from fetched logos
+    }
+  }
   if (n) {
     await service.persistNow();
     service.emitChange({ method: "apps.captureAll", userId: "system", userName: "System", appId: null, summary: `Applied ${n} logo file(s)`, at: new Date().toISOString() });

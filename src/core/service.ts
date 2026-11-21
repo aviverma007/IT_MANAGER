@@ -1521,7 +1521,7 @@ export class Service {
     if ("ownerId" in p) set("ownerId", this.db.users.some((u) => u.id === p.ownerId) ? p.ownerId : null);
     if ("cover" in p) set("cover", String(p.cover ?? "").slice(0, 3_000_000));
     // a logo link handed back from the list (/api/logo/…) means "unchanged"
-    if ("logo" in p && !String(p.logo ?? "").startsWith("/api/logo/")) set("logo", String(p.logo ?? "").slice(0, 600_000));
+    if ("logo" in p && !String(p.logo ?? "").startsWith("/api/logo/")) { set("logo", String(p.logo ?? "").slice(0, 600_000)); app.logoSource = app.logo ? "upload" : ""; }
     if ("seats" in p) set("seats", Math.max(0, Math.round(toNumber(p.seats))));
     if ("activeUsersManual" in p) set("activeUsersManual", Math.max(0, Math.round(toNumber(p.activeUsersManual))));
     if ("hosting" in p) { const h = normHosting(p.hosting); if (h !== null) set("hosting", h); }
