@@ -2,7 +2,7 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  Banknote, Bot, Boxes, Briefcase, Building2, ChevronDown, Cloud, Code2, Gauge, HardDrive, Headphones, LayoutGrid, LayoutList, Rows3, Search, ExternalLink, Megaphone, Monitor, PieChart, Server, ShieldCheck, Users, Wrench,
+  Banknote, Bot, Boxes, Briefcase, Building2, ChevronDown, Cloud, Code2, Gauge, HardDrive, Headphones, LayoutGrid, LayoutList, Search, ExternalLink, Megaphone, Monitor, PieChart, Server, ShieldCheck, Users, Wrench,
 } from "lucide-react";
 import type { AppSummary } from "@/core/types";
 import { useMe } from "@/lib/auth";
@@ -139,7 +139,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
   const confirm = useConfirm();
   const [open, setOpen] = React.useState(() => { try { return localStorage.getItem("itm.landscape") !== "0"; } catch { return true; } });
   const [by, setBy] = React.useState<GroupBy>(() => { try { return (localStorage.getItem("itm.landscapeBy") as GroupBy) || "category"; } catch { return "category"; } });
-  const [layout, setLayout] = React.useState<"groups" | "cards">(() => { try { return (localStorage.getItem("itm.landscapeLayout") as "groups" | "cards") || "groups"; } catch { return "groups"; } });
+  const [layout, setLayout] = React.useState<"groups" | "cards" | "list">(() => { try { return (localStorage.getItem("itm.landscapeLayout") as "groups" | "cards" | "list") || "groups"; } catch { return "groups"; } });
   React.useEffect(() => { try { localStorage.setItem("itm.landscape", open ? "1" : "0"); localStorage.setItem("itm.landscapeBy", by); localStorage.setItem("itm.landscapeLayout", layout); } catch { /* ignore */ } }, [open, by, layout]);
 
   const t = totals(apps);
@@ -163,19 +163,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
           <motion.span animate={{ rotate: open ? 0 : -90 }} className="emboss grid size-8 place-items-center rounded-xl"><ChevronDown className="size-4" /></motion.span>
           <span><span className="block text-lg font-semibold tracking-tight">Application landscape</span><span className="block text-xs text-muted-foreground">Users, licensed seats, % of seats in use and open tickets — by group</span></span>
         </button>
-        {open && (
-          <motion.button onClick={() => setLayout((l) => (l === "groups" ? "cards" : "groups"))} whileTap={{ scale: 0.95 }} title="Switch between group cards and one card per application"
-            className="emboss ml-auto inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium">
-            <span className="relative grid size-5 place-items-center">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span key={layout} initial={{ rotate: -90, opacity: 0, scale: 0.6 }} animate={{ rotate: 0, opacity: 1, scale: 1 }} exit={{ rotate: 90, opacity: 0, scale: 0.6 }} className="absolute">
-                  {layout === "groups" ? <LayoutList className="size-4" /> : <Rows3 className="size-4" />}
-                </motion.span>
-              </AnimatePresence>
-            </span>
-            {layout === "groups" ? "Show every app as a card" : "Show grouped"}
-          </motion.button>
-        )}
+        {open && <Tabs id="landscape-layout" className="ml-auto" value={layout} onChange={setLayout} tabs={[{ value: "groups", label: "Grouped", icon: <LayoutGrid /> }, { value: "cards", label: "Cards", icon: <Boxes /> }, { value: "list", label: "List", icon: <LayoutList /> }]} />}
         {open && <Tabs id="landscape-by" value={by} onChange={setBy} tabs={[{ value: "category", label: "By category", icon: <LayoutGrid /> }, { value: "hosting", label: "On-prem / Cloud", icon: <Server /> }, { value: "source", label: "In-house / Vendor", icon: <Code2 /> }]} />}
       </div>
 
@@ -205,7 +193,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
                 </div>
               )}
 
-              {layout === "cards" ? <AppCardsGrid groups={groups} by={by} onTickets={setDrill} /> : (
+              {layout !== "groups" ? <AppCardsGrid groups={groups} by={by} onTickets={setDrill} list={layout === "list"} /> : (
                 <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                   <AnimatePresence mode="popLayout">
                     {groups.map(([key, list], i) => (
@@ -228,7 +216,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
 }
 
 /** Cards layout: every application gets its own card, listed one after another (in the current grouping order). */
-function AppCardsGrid({ groups, by, onTickets }: { groups: [string, AppSummary[]][]; by: GroupBy; onTickets: DrillTo }) {
+function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSummary[]][]; by: GroupBy; onTickets: DrillTo; list?: boolean }) {
   const openPeople = useOpenPeople();
   const [q, setQ] = React.useState("");
   const [sort, setSort] = React.useState<"group" | "name" | "users" | "util" | "tickets">("group");
@@ -246,6 +234,41 @@ function AppCardsGrid({ groups, by, onTickets }: { groups: [string, AppSummary[]
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an application…" className="deboss h-10 w-full rounded-2xl bg-transparent pl-9 pr-3 text-sm outline-none" /></div>
         <Tabs id="landscape-cards-sort" value={sort} onChange={setSort} tabs={[{ value: "group", label: "By group" }, { value: "name", label: "A–Z" }, { value: "users", label: "Most users" }, { value: "util", label: "Seats used %" }, { value: "tickets", label: "Open tickets" }]} />
       </div>
+      {list ? (
+        <div className="glass overflow-x-auto rounded-3xl">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead><tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">{["Application", "Group", "Status", "Users / seats", "Seats used", "Tickets", ""].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
+            <tbody>
+              {shown.map(({ a, group, tone }, i) => {
+                const u = a.landscape.utilization;
+                return (
+                  <motion.tr key={a.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 25) * 0.012 }} className="border-t border-border hover:bg-muted/30">
+                    <td className="px-4 py-2.5">
+                      <Link to={`/apps/${a.id}`} className="flex items-center gap-3">
+                        <img src={coverFor(a, 120, 120)} alt="" className="h-9 w-14 shrink-0 rounded-lg border border-border object-cover object-top" />
+                        <span className="min-w-0"><span className="flex items-center gap-1.5 truncate font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span></span>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2.5"><span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium"><span className="size-2 rounded-full" style={{ background: tone }} />{group}</span></td>
+                    <td className="px-4 py-2.5"><StatusBadge status={a.status} /></td>
+                    <td className="px-4 py-2.5"><PeopleChip app={a} big onOpen={() => openPeople(a)} /></td>
+                    <td className="w-64 px-4 py-2.5">
+                      <span className="flex items-center gap-2">
+                        <span className="deboss h-1.5 w-20 shrink-0 overflow-hidden rounded-full"><span className="block h-full rounded-full" style={{ width: `${Math.min(100, u ?? 0)}%`, background: utilColor(u) }} /></span>
+                        <span className="w-10 text-right font-bold tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</span>
+                        <UsageTag app={a} />
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">{a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : <span className="text-xs text-muted-foreground">—</span>}</td>
+                    <td className="px-4 py-2.5 text-right">{a.url && <button onClick={() => openApp(a)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary" title={a.url}><ExternalLink className="size-3.5" />Open</button>}</td>
+                  </motion.tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         <AnimatePresence mode="popLayout">
           {shown.map(({ a, group, tone }, i) => {
@@ -283,6 +306,7 @@ function AppCardsGrid({ groups, by, onTickets }: { groups: [string, AppSummary[]
           })}
         </AnimatePresence>
       </div>
+      )}
       {!shown.length && <p className="py-8 text-center text-sm text-muted-foreground">No application matches “{q}”.</p>}
     </div>
   );
