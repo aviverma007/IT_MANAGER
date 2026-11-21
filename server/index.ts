@@ -211,7 +211,7 @@ app.post("/api/apps.captureAll", async (req, res) => {
     const user = service.authenticate(tokenOf(req));
     if (!user) throw new ApiError(401, "Please sign in again.");
     const onlyMissing = req.body?.onlyMissing !== false;
-    const targets = service.db.apps.filter((a) => /^https?:/i.test(a.url) && service.permission(user, a) === "edit" && (!onlyMissing || !service.db.screenshots.some((x) => x.appId === a.id)));
+    const targets = service.db.apps.filter((a) => /^https?:/i.test(a.url) && service.permission(user, a) === "edit" && (!onlyMissing || (!a.logo && !service.db.screenshots.some((x) => x.appId === a.id))));
     const result = { captured: 0, failed: [] as string[], skipped: service.db.apps.length - targets.length };
     const queue = [...targets];
     await Promise.all([0, 1].map(async () => {
@@ -453,7 +453,8 @@ setInterval(() => void loadLogoFiles().catch(() => undefined), 60_000).unref();
 async function captureMissing() {
   const admin = service.db.users.find((u) => u.role === "admin" && u.active);
   if (!admin) return;
-  const targets = service.db.apps.filter((a) => /^https?:/i.test(a.url) && !service.db.screenshots.some((x) => x.appId === a.id));
+  // apps that already have a logo don't need a screenshot to look right
+  const targets = service.db.apps.filter((a) => /^https?:/i.test(a.url) && !a.logo && !service.db.screenshots.some((x) => x.appId === a.id));
   if (!targets.length) return;
   console.log(`[capture] ${targets.length} app(s) without screenshots — capturing…`);
   let done = 0;
