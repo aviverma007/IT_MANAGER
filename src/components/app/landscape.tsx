@@ -44,7 +44,19 @@ const HOSTING_META: Record<string, { label: string; icon: typeof Server; hint: s
   desktop: { label: "Desktop", icon: Monitor, hint: "Installed on PCs" },
   "": { label: "Hosting not set", icon: HardDrive, hint: "Set it in Edit → Basics" },
 };
-const GROUP_TONES = ["#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#f43f5e", "#3b82f6", "#ec4899", "#14b8a6", "#a855f7", "#64748b"];
+/** One fixed colour per department / group, so the same group always glows the same way. */
+const NAMED_COLORS: Record<string, string> = {
+  "ERP & Finance": "#10b981", "CRM & Sales": "#3b82f6", Marketing: "#ec4899", "Construction & Design": "#f59e0b", Productivity: "#8b5cf6",
+  "AI Assistants": "#06b6d4", "HR & Compliance": "#f43f5e", "IT Ops & Analytics": "#6366f1", "In-house": "#a855f7",
+  "On-premises": "#8b5cf6", Cloud: "#0ea5e9", SaaS: "#38bdf8", Desktop: "#f59e0b", "Hosting not set": "#64748b", "Vendor / licensed": "#0ea5e9", "Built in-house": "#a855f7",
+};
+const HASH_COLORS = ["#14b8a6", "#e11d48", "#7c3aed", "#d97706", "#0284c7", "#16a34a", "#c026d3", "#ea580c", "#4f46e5", "#0891b2"];
+export function groupColor(name: string) {
+  if (NAMED_COLORS[name]) return NAMED_COLORS[name]!;
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return HASH_COLORS[h % HASH_COLORS.length]!;
+}
 
 function groupKey(a: AppSummary, by: GroupBy) {
   if (by === "hosting") return a.hosting || "";
@@ -197,7 +209,7 @@ export function Landscape({ apps, allApps }: { apps: AppSummary[]; allApps: AppS
                 <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                   <AnimatePresence mode="popLayout">
                     {groups.map(([key, list], i) => (
-                      <GroupCard key={`${by}:${key}`} title={groupLabel(key, by)} Icon={groupIcon(key, by)} tone={GROUP_TONES[i % GROUP_TONES.length]!} apps={list} index={i} onTickets={setDrill} />
+                      <GroupCard key={`${by}:${key}`} title={groupLabel(key, by)} Icon={groupIcon(key, by)} tone={groupColor(groupLabel(key, by))} apps={list} index={i} onTickets={setDrill} />
                     ))}
                   </AnimatePresence>
                 </div>
@@ -220,7 +232,7 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
   const openPeople = useOpenPeople();
   const [q, setQ] = React.useState("");
   const [sort, setSort] = React.useState<"group" | "name" | "users" | "util" | "tickets">("group");
-  const rows = groups.flatMap(([key, list], gi) => [...list].sort((a, b) => a.name.localeCompare(b.name)).map((a) => ({ a, group: groupLabel(key, by), tone: GROUP_TONES[gi % GROUP_TONES.length]! })));
+  const rows = groups.flatMap(([key, list]) => [...list].sort((a, b) => a.name.localeCompare(b.name)).map((a) => ({ a, group: groupLabel(key, by), tone: groupColor(groupLabel(key, by)) })));
   const shown = rows
     .filter(({ a, group }) => !q || `${a.name} ${a.vendor} ${a.category} ${group}`.toLowerCase().includes(q.toLowerCase()))
     .sort((x, y) => sort === "name" ? x.a.name.localeCompare(y.a.name)
@@ -269,46 +281,44 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
           </table>
         </div>
       ) : (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         <AnimatePresence mode="popLayout">
           {shown.map(({ a, group, tone }, i) => {
             const u = a.landscape.utilization;
             return (
-              <motion.div key={a.id} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 16) * 0.02 }}
-                whileHover={{ y: -4 }} className="group relative h-80 overflow-hidden rounded-3xl border border-white/30 shadow-[0_20px_45px_-25px_rgb(0_0_0/0.5)] dark:border-white/10">
-                {/* the picture fills the whole card */}
+              <motion.div key={a.id} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 18) * 0.02 }}
+                whileHover={{ y: -5 }} className="group relative aspect-[4/5] overflow-hidden rounded-3xl"
+                style={{ boxShadow: `0 0 0 1px color-mix(in oklab, ${tone} 45%, transparent), 0 14px 34px -10px color-mix(in oklab, ${tone} 70%, transparent), 0 0 46px -14px ${tone}` }}>
+                {/* the picture fills the whole card; the glow / wash follows the department colour */}
                 <Link to={`/apps/${a.id}`} className="absolute inset-0 block" aria-label={a.name}>
                   {a.logo ? (
-                    <span className="absolute inset-0 block overflow-hidden" style={{ background: `linear-gradient(150deg, color-mix(in oklab, ${tone} 30%, white), color-mix(in oklab, ${tone} 12%, white))` }}>
-                      <img src={a.logo} alt="" aria-hidden className="absolute inset-0 size-full scale-[1.8] object-cover opacity-45 blur-3xl saturate-150" />
-                      <img src={a.logo} alt="" className="absolute left-1/2 top-[34%] w-[52%] max-w-[180px] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_18px_30px_rgb(0_0_0/0.25)] transition-transform duration-700 group-hover:scale-110" />
+                    <span className="absolute inset-0 block" style={{ background: `radial-gradient(120% 90% at 50% 30%, color-mix(in oklab, ${tone} 28%, white), color-mix(in oklab, ${tone} 70%, #0b0b12))` }}>
+                      <img src={a.logo} alt="" className="absolute left-1/2 top-[38%] w-[62%] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_14px_24px_rgb(0_0_0/0.3)] transition-transform duration-700 group-hover:scale-110" />
                     </span>
                   ) : (
-                    <img src={coverFor(a, 800, 900)} alt="" className="absolute inset-0 size-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
+                    <>
+                      <img src={coverFor(a, 700, 880)} alt="" className="absolute inset-0 size-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
+                      <span className="absolute inset-0 mix-blend-soft-light" style={{ background: tone }} />
+                    </>
                   )}
-                  <span className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/45" />
+                  {/* dark fade at the bottom so the text reads on any picture */}
+                  <span className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
                 </Link>
-                <span className="pointer-events-none absolute left-3 top-3 flex gap-1.5"><StatusBadge status={a.status} className="!bg-background/85 backdrop-blur-md" /></span>
-                <span className="pointer-events-none absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow" style={{ background: tone }}>{group}</span>
-                {/* frosted panel over the picture */}
-                <div className="absolute inset-x-2.5 bottom-2.5 flex flex-col gap-2 rounded-2xl border border-white/40 bg-background/75 p-3.5 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-background/70">
-                  <div className="flex items-start gap-2">
-                    <Link to={`/apps/${a.id}`} className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5 truncate text-base font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span>
-                    </Link>
-                    <UsageTag app={a} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-foreground/10"><motion.span className="block h-full rounded-full" style={{ background: utilColor(u) }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} /></span>
-                    <span className="text-sm font-bold tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</span>
-                    <span className="text-[10px] text-muted-foreground">seats used</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <PeopleChip app={a} big onOpen={() => openPeople(a)} />
-                    {a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : null}
-                    {a.url && <button onClick={() => openApp(a)} className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary" title={a.url}><ExternalLink className="size-3.5" />Open</button>}
-                  </div>
+                <span className="pointer-events-none absolute left-2.5 top-2.5"><StatusBadge status={a.status} className="!bg-black/45 !text-white backdrop-blur-sm" /></span>
+                <span className="pointer-events-none absolute right-2.5 top-2.5 max-w-[55%] truncate rounded-full px-2 py-0.5 text-[9px] font-semibold text-white shadow" style={{ background: tone }}>{group}</span>
+                {/* name, bar and numbers straight on the picture */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-3.5 text-white">
+                  <span className="flex items-center gap-1.5 truncate text-[15px] font-semibold leading-tight drop-shadow">{a.name}{a.source === "in-house" && <span className="rounded bg-white/20 px-1 text-[9px] font-bold uppercase">IT</span>}</span>
+                  <span className="-mt-1 truncate text-[11px] text-white/70">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20"><motion.span className="block h-full rounded-full" style={{ background: utilColor(u), boxShadow: `0 0 10px ${utilColor(u)}` }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }} /></span>
+                    <span className="text-sm font-bold tabular-nums">{u === null ? "—" : `${u}%`}</span>
+                  </span>
+                  <span className="pointer-events-auto flex items-center justify-between gap-1 text-xs tabular-nums">
+                    <button onClick={() => openPeople(a)} className="inline-flex items-center gap-1 rounded-full hover:underline" title="See the list of users"><Users className="size-3.5 text-white/70" /><b>{fmtNumber(a.landscape.activeUsers)}</b><span className="text-white/70">{a.seats ? `/ ${fmtNumber(a.seats)}` : "users"}</span></button>
+                    {a.tickets?.open ? <button onClick={() => onTickets({ title: a.name, appIds: [a.id] })} className="inline-flex items-center gap-1 font-semibold text-amber-300 hover:underline"><TicketIcon className="size-3.5" />{a.tickets.open}</button>
+                      : a.url ? <button onClick={() => openApp(a)} className="inline-flex items-center gap-1 text-white/80 hover:text-white" title={a.url}><ExternalLink className="size-3.5" />Open</button> : null}
+                  </span>
                 </div>
               </motion.div>
             );

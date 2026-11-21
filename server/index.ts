@@ -390,6 +390,42 @@ async function logoCovers() {
   return n;
 }
 
+
+/* Logo files: drop images into server/logos named after the app ("SAP.png", "Microsoft 365.svg", "SMARTDESK.png").
+   They are matched by name or code (case, spaces and punctuation ignored) and always win over fetched logos. */
+const LOGO_DIR = path.resolve(process.env.LOGO_DIR ?? path.join(import.meta.dirname, "logos"));
+const LOGO_TYPES: Record<string, string> = { ".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
+const logoSeen = new Map<string, number>();
+async function loadLogoFiles() {
+  if (!fs.existsSync(LOGO_DIR)) return 0;
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  let n = 0;
+  const unmatched: string[] = [];
+  for (const file of await fs.promises.readdir(LOGO_DIR)) {
+    const ext = path.extname(file).toLowerCase();
+    const type = LOGO_TYPES[ext];
+    if (!type) continue;
+    const full = path.join(LOGO_DIR, file);
+    const mtime = (await fs.promises.stat(full)).mtimeMs;
+    const key = norm(path.basename(file, ext));
+    const app = service.db.apps.find((a) => norm(a.name) === key || norm(a.code) === key);
+    if (!app) { unmatched.push(file); continue; }
+    if (logoSeen.get(file) === mtime && app.logo) continue;
+    logoSeen.set(file, mtime);
+    const data = `data:${type};base64,${(await fs.promises.readFile(full)).toString("base64")}`;
+    if (app.logo !== data) { app.logo = data; n++; }
+  }
+  if (unmatched.length) console.log(`[logos] no application named like: ${unmatched.join(", ")}`);
+  if (n) {
+    await service.persistNow();
+    service.emitChange({ method: "apps.captureAll", userId: "system", userName: "System", appId: null, summary: `Applied ${n} logo file(s)`, at: new Date().toISOString() });
+    console.log(`[logos] applied ${n} logo file(s) from ${LOGO_DIR}`);
+  }
+  return n;
+}
+setTimeout(() => void loadLogoFiles().catch((e) => console.log("[logos]", e.message)), 2000);
+setInterval(() => void loadLogoFiles().catch(() => undefined), 60_000).unref();
+
 /* Automatic capture: any app that has a link but no screenshot is captured shortly after start-up and
    retried every CAPTURE_RETRY_HOURS (apps that were down get picked up later). CAPTURE_ON_START=false turns it off. */
 async function captureMissing() {
