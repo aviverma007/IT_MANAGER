@@ -1,5 +1,4 @@
 import * as React from "react";
-import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { AppLogo, useLogoColor } from "@/components/app/app-logo";
 import { AnimatePresence, motion } from "motion/react";
@@ -267,68 +266,60 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
   );
 }
 
-/** Cards view: just the logo, filling the card. Everything else shows in a bubble while you hover it. */
+/** Cards view: logo on top, name band below; hovering drops down a details panel (it overlays the next row). */
 function LogoCard({ a, group, tone, i, onTickets, onPeople }: { a: AppSummary; group: string; tone: string; i: number; onTickets: DrillTo; onPeople: () => void }) {
-  const ref = React.useRef<HTMLDivElement>(null);
+  const [open, setOpen] = React.useState(false);
   const timer = React.useRef(0);
-  const [pos, setPos] = React.useState<{ x: number; y: number; side: "right" | "left" } | null>(null);
-  const show = () => {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => {
-      const r = ref.current?.getBoundingClientRect();
-      if (!r) return;
-      const W = 300, right = r.right + 14 + W < window.innerWidth;
-      setPos({ x: right ? r.right + 14 : r.left - 14 - W, y: Math.min(Math.max(12, r.top + r.height / 2 - 150), window.innerHeight - 320), side: right ? "right" : "left" });
-    }, 120);
-  };
-  const hide = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setPos(null), 160); };
+  const enter = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setOpen(true), 90); };
+  const leave = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setOpen(false), 140); };
   React.useEffect(() => () => window.clearTimeout(timer.current), []);
   const u = a.landscape.utilization;
+  const t = a.tickets ?? { open: 0, high: 0, total: 0, created30: 0 };
+  const Row = ({ label, color, value, bg, onClick }: { label: string; color: string; value: React.ReactNode; bg: string; onClick?: () => void }) => (
+    <div className="flex items-center justify-between gap-2">
+      <span className="flex items-center gap-2 whitespace-nowrap text-[13px] font-semibold" style={{ color }}><span className="h-0.5 w-2 shrink-0 rounded" style={{ background: color }} />{label}</span>
+      <button disabled={!onClick} onClick={onClick} className="min-w-12 whitespace-nowrap rounded-md px-2.5 py-1 text-center text-[13px] font-semibold tabular-nums enabled:hover:brightness-95" style={{ background: bg, color }}>{value}</button>
+    </div>
+  );
   return (
-    <>
-      <motion.div ref={ref} onMouseEnter={show} onMouseLeave={hide} layout initial={{ opacity: 0, y: 14, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 18) * 0.02 }} whileHover={{ y: -5, scale: 1.02 }}
-        className="group relative aspect-square rounded-3xl border-2 transition-colors"
-        style={{ borderColor: `color-mix(in oklab, ${tone} 35%, transparent)`, boxShadow: `0 10px 26px -18px ${tone}` }}>
-        <Link to={`/apps/${a.id}`} className="absolute inset-0 block" aria-label={a.name}>
+    <motion.div onMouseEnter={enter} onMouseLeave={leave} layout initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 260, damping: 26, delay: Math.min(i, 18) * 0.02 }}
+      className={cn("relative", open && "z-30")}>
+      <div className={cn("overflow-hidden border bg-card shadow-[0_10px_28px_-18px_rgb(0_0_0/0.45)] transition-[border-radius,box-shadow] duration-200", open ? "rounded-t-2xl shadow-[0_18px_40px_-18px_rgb(0_0_0/0.5)]" : "rounded-2xl")}
+        style={{ borderColor: `color-mix(in oklab, ${tone} 30%, var(--border))` }}>
+        <Link to={`/apps/${a.id}`} className="relative block aspect-[16/10] overflow-hidden" aria-label={a.name}>
           {a.logo
-            ? <img src={a.logo} alt={a.name} className="absolute inset-[6%] size-[88%] object-contain transition-transform duration-500 group-hover:scale-105" />
-            : <img src={coverFor(a, 600, 600)} alt={a.name} className="absolute inset-0 size-full rounded-[22px] object-cover object-top" />}
+            ? <img src={a.logo} alt={a.name} className="absolute inset-[8%] size-[84%] object-contain transition-transform duration-500 hover:scale-105" />
+            : <img src={coverFor(a, 640, 400)} alt={a.name} className="absolute inset-0 size-full object-cover object-top" />}
+          <span className="absolute right-2 top-2"><StatusBadge status={a.status} className="!bg-background/85 backdrop-blur-md" /></span>
         </Link>
-      </motion.div>
-      {pos && createPortal(
-        <motion.div onMouseEnter={() => window.clearTimeout(timer.current)} onMouseLeave={hide}
-          initial={{ opacity: 0, scale: 0.9, x: pos.side === "right" ? -8 : 8 }} animate={{ opacity: 1, scale: 1, x: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28 }}
-          className="fixed z-[60] w-[300px] rounded-[28px] border border-border bg-popover p-4 text-sm text-popover-foreground shadow-2xl"
-          style={{ left: pos.x, top: pos.y, transformOrigin: pos.side === "right" ? "left center" : "right center" }}>
-          {/* little tail pointing at the card */}
-          <span aria-hidden className={cn("absolute top-[140px] size-4 rotate-45 border-border bg-popover", pos.side === "right" ? "-left-2 border-b border-l" : "-right-2 border-r border-t")} />
-          <div className="flex items-center gap-3">
-            <AppLogo app={a} className="size-11" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 truncate text-base font-semibold">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</div>
-              <div className="truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</div>
+        <Link to={`/apps/${a.id}`} className="relative flex min-h-14 items-center px-4 py-2.5" style={{ background: `color-mix(in oklab, ${tone} 14%, var(--card))` }}>
+          <span className="absolute inset-y-2 left-0 w-1 rounded-r" style={{ background: `color-mix(in oklab, ${tone} 70%, #111)` }} />
+          <span className="min-w-0">
+            <span className="flex items-center gap-1.5 truncate text-[15px] font-bold leading-tight">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{group}</span>
+          </span>
+        </Link>
+      </div>
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            className="absolute inset-x-0 top-full overflow-hidden rounded-b-2xl border border-t-0 bg-card shadow-[0_24px_40px_-20px_rgb(0_0_0/0.5)]"
+            style={{ borderColor: `color-mix(in oklab, ${tone} 30%, var(--border))` }}>
+            <div className="flex flex-col gap-2.5 p-4">
+              <Row label="Seats used" color={u === null ? "#64748b" : u >= 60 ? "#15803d" : u >= 45 ? "#b45309" : "#dc2626"} bg={u === null ? "#f1f5f9" : u >= 60 ? "#dcfce7" : u >= 45 ? "#fef3c7" : "#fee2e2"} value={u === null ? "—" : `${u}%`} />
+              <Row label="Active users" color="#1d4ed8" bg="#dbeafe" value={<>{fmtNumber(a.landscape.activeUsers)}{a.seats ? <span className="font-normal opacity-70"> / {fmtNumber(a.seats)}</span> : null}</>} onClick={onPeople} />
+              <Row label="Open tickets" color={t.high ? "#dc2626" : "#b45309"} bg={t.high ? "#fee2e2" : "#fef3c7"} value={t.open} onClick={t.total ? () => onTickets({ title: a.name, appIds: [a.id] }) : undefined} />
+              <Row label="Tasks done" color="#475569" bg="#f1f5f9" value={a.tasksTotal ? `${a.progress}%` : "—"} />
+              <div className="mt-1 flex gap-2">
+                <Link to={`/apps/${a.id}`} className="flex-1"><Button size="sm" variant="secondary" className="w-full">App page</Button></Link>
+                {a.url && <Button size="sm" variant="primary" className="flex-1" onClick={() => openApp(a)}><ExternalLink />Open</Button>}
+              </div>
             </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <StatusBadge status={a.status} />
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: tone }}>{group}</span>
-            <UsageTag app={a} />
-          </div>
-          <div className="mt-3">
-            <div className="mb-1 flex items-baseline justify-between text-xs"><span className="text-muted-foreground">Seats used</span><b className="text-base tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</b></div>
-            <div className="h-2 overflow-hidden rounded-full bg-foreground/10"><motion.div className="h-full rounded-full" style={{ background: utilColor(u) }} initial={{ width: 0 }} animate={{ width: `${Math.min(100, u ?? 0)}%` }} transition={{ duration: 0.7 }} /></div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <PeopleChip app={a} big onOpen={() => { setPos(null); onPeople(); }} />
-            {a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => { setPos(null); onTickets({ title: a.name, appIds: [a.id] }); }} /> : <span className="text-xs text-muted-foreground">No tickets</span>}
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Link to={`/apps/${a.id}`} className="flex-1"><Button size="sm" variant="secondary" className="w-full">App page</Button></Link>
-            {a.url && <Button size="sm" variant="primary" className="flex-1" onClick={() => openApp(a)}><ExternalLink />Open</Button>}
-          </div>
-        </motion.div>, document.body)}
-    </>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
