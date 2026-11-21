@@ -35,7 +35,9 @@ class FileStore implements Store {
   }
 }
 
-const service = await new Service(new FileStore(), { seed: SEED }).init();
+/** Logos are served as cached image links (/api/logo/<id>?v=…) instead of being inlined in every app list. */
+const logoVersion = (logo: string) => { let h = logo.length; for (let i = Math.max(0, logo.length - 256); i < logo.length; i++) h = (h * 33 + logo.charCodeAt(i)) >>> 0; return h.toString(36); };
+const service = await new Service(new FileStore(), { seed: SEED, logoUrl: (a) => `/api/logo/${a.id}?v=${logoVersion(a.logo)}` }).init();
 const app = express();
 app.disable("x-powered-by");
 app.use(cors());
@@ -310,6 +312,15 @@ app.post("/api/:method", async (req, res) => {
   }
 });
 
+app.get("/api/logo/:id", (req, res) => {
+  const a = service.db.apps.find((x) => x.id === req.params.id);
+  const m = a?.logo.match(/^data:([^;,]+)(;base64)?,(.*)$/s);
+  if (!m) return res.status(404).end();
+  res.setHeader("Content-Type", m[1]!);
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.end(m[2] ? Buffer.from(m[3]!, "base64") : Buffer.from(decodeURIComponent(m[3]!)));
+});
+
 app.get("/api/health", (_req, res) => res.json({ ok: true, apps: service.db.apps.length, time: new Date().toISOString() }));
 
 if (fs.existsSync(DIST)) {
@@ -408,7 +419,7 @@ async function loadLogoFiles() {
     const full = path.join(LOGO_DIR, file);
     const mtime = (await fs.promises.stat(full)).mtimeMs;
     const key = norm(path.basename(file, ext));
-    const app = service.db.apps.find((a) => norm(a.name) === key || norm(a.code) === key);
+    const app = service.db.apps.find((a) => norm(a.name) === key) ?? service.db.apps.find((a) => norm(a.code) === key); // exact name first
     if (!app) { unmatched.push(file); continue; }
     if (logoSeen.get(file) === mtime && app.logo) continue;
     logoSeen.set(file, mtime);

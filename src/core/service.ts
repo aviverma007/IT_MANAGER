@@ -90,7 +90,7 @@ export class Service {
     for (const fn of this.listeners) { try { fn(e); } catch { /* a dead listener must not break writes */ } }
   }
 
-  constructor(private store: Store, private options: { seed: boolean } = { seed: true }) {
+  constructor(private store: Store, private options: { seed: boolean; logoUrl?: (app: App) => string } = { seed: true }) {
     this.register();
   }
 
@@ -254,6 +254,7 @@ export class Service {
       docCount: this.db.docs.filter((d) => d.appId === app.id).length,
       coverShot: this.coverShot(app),
       landscape: this.landscapeOf(app),
+      ...(app.logo && this.options.logoUrl ? { logo: this.options.logoUrl(app) } : {}),
       tickets: this.ticketCounts(app.id),
       people: this.peopleCounts(app.id),
       shotCount: this.db.screenshots.filter((x) => x.appId === app.id).length,
@@ -1519,7 +1520,8 @@ export class Service {
     if ("techStack" in p) set("techStack", splitList(p.techStack).slice(0, 20));
     if ("ownerId" in p) set("ownerId", this.db.users.some((u) => u.id === p.ownerId) ? p.ownerId : null);
     if ("cover" in p) set("cover", String(p.cover ?? "").slice(0, 3_000_000));
-    if ("logo" in p) set("logo", String(p.logo ?? "").slice(0, 600_000));
+    // a logo link handed back from the list (/api/logo/…) means "unchanged"
+    if ("logo" in p && !String(p.logo ?? "").startsWith("/api/logo/")) set("logo", String(p.logo ?? "").slice(0, 600_000));
     if ("seats" in p) set("seats", Math.max(0, Math.round(toNumber(p.seats))));
     if ("activeUsersManual" in p) set("activeUsersManual", Math.max(0, Math.round(toNumber(p.activeUsersManual))));
     if ("hosting" in p) { const h = normHosting(p.hosting); if (h !== null) set("hosting", h); }
