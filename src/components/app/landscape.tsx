@@ -266,8 +266,8 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
                 {/* the picture fills the whole card; the glow / wash follows the department colour */}
                 <Link to={`/apps/${a.id}`} className="absolute inset-0 block" aria-label={a.name}>
                   {a.logo ? (
-                    <span className="absolute inset-0 block" style={{ background: `radial-gradient(120% 90% at 50% 30%, color-mix(in oklab, ${tone} 28%, white), color-mix(in oklab, ${tone} 70%, #0b0b12))` }}>
-                      <img src={a.logo} alt="" className="absolute left-1/2 top-[38%] w-[62%] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_14px_24px_rgb(0_0_0/0.3)] transition-transform duration-700 group-hover:scale-110" />
+                    <span className="absolute inset-0 block bg-white">
+                      <img src={a.logo} alt="" className="absolute inset-x-[5%] top-[5%] h-[56%] w-[90%] object-contain transition-transform duration-700 group-hover:scale-105" />
                     </span>
                   ) : (
                     <>
@@ -276,7 +276,7 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
                     </>
                   )}
                   {/* dark fade at the bottom so the text reads on any picture */}
-                  <span className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
+                  <span className={cn("absolute inset-x-0 bottom-0 bg-gradient-to-t", a.logo ? "h-[40%] from-black/90 via-black/88 via-80% to-transparent" : "h-3/5 from-black/85 via-black/45 to-transparent")} />
                 </Link>
                 <span className="pointer-events-none absolute left-2.5 top-2.5"><StatusBadge status={a.status} className="!bg-black/45 !text-white backdrop-blur-sm" /></span>
                 <span className="pointer-events-none absolute right-2.5 top-2.5 max-w-[55%] truncate rounded-full px-2 py-0.5 text-[9px] font-semibold text-white shadow" style={{ background: tone }}>{group}</span>
