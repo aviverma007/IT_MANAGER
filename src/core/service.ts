@@ -10,6 +10,7 @@ import { hashPassword, newSalt, newToken, verifyPassword } from "./crypto";
 import { addDays, normalizeDate, nowIso, splitList, toBool, toNumber, uid, ymd } from "./util";
 import { emptyDb, freshDb, sampleDb } from "./seed";
 import { LANDSCAPE, landscapeItemFor } from "./landscape";
+import { detailsFor } from "./details";
 
 export interface Store {
   load(): Promise<DB | null>;
@@ -104,6 +105,13 @@ export class Service {
       if (admin && !this.db.apps.some((a) => a.source === "vendor") && !this.db.logs.some((l) => l.summary.startsWith("Loaded the application landscape"))) {
         const r = this.loadLandscape({ user: admin });
         console.log(`[landscape] added ${r.created} vendor apps, updated ${r.updated}`);
+        await this.persist();
+      }
+      // one-time: real details for every app (replaces the sample About text and placeholder dates)
+      const adminU = this.db.users.find((u) => u.role === "admin" && u.active);
+      if (adminU && !this.db.logs.some((l) => l.summary.startsWith("Filled application details"))) {
+        const r = this.fillDetails({ user: adminU }, "overwrite");
+        console.log(`[details] filled ${r.apps} apps (${r.docs} docs, ${r.releases} releases, ${r.tasks} tasks)`);
         await this.persist();
       }
     }
@@ -459,6 +467,65 @@ export class Service {
   }
 
 
+
+
+  /** Fill About fields, docs, releases and open items from details.ts.
+   *  mode "overwrite" replaces the About fields (first run); "fill" only fills empty ones. Docs / releases / tasks are only ever added. */
+  fillDetails(ctx: Ctx, mode: "overwrite" | "fill" = "fill") {
+    const admin = ctx.user;
+    let apps = 0, docs = 0, releases = 0, tasks = 0;
+    for (const app of this.db.apps) {
+      const d = detailsFor(app);
+      if (!d) continue;
+      apps++;
+      const put = <K extends keyof App>(k: K, v: App[K] | undefined) => {
+        if (v === undefined) return;
+        const cur = app[k];
+        const empty = cur === "" || cur == null || (Array.isArray(cur) && !cur.length);
+        if (mode === "overwrite" || empty) app[k] = v;
+      };
+      put("tagline", d.tagline);
+      put("description", d.description);
+      put("department", d.department);
+      put("category", d.category);
+      put("techStack", d.techStack);
+      put("version", d.version);
+      if (mode === "overwrite") {
+        if (d.status) app.status = d.status;
+        if (d.priority) app.priority = d.priority;
+        app.startDate = d.startDate ?? ""; // placeholder dates go; unknown stays blank
+        app.goLiveDate = d.goLiveDate ?? "";
+      } else {
+        put("startDate", d.startDate || undefined);
+        put("goLiveDate", d.goLiveDate || undefined);
+      }
+      if (!app.url && d.url) app.url = d.url;
+      for (const e of d.environments ?? []) if (e.url && !app.environments.some((x) => x.url === e.url)) app.environments.push(e);
+      if (app.source !== "vendor" && !app.ownerId) app.ownerId = admin.id;
+      for (const doc of d.docs ?? []) {
+        if (this.db.docs.some((x) => x.appId === app.id && x.title.toLowerCase() === doc.title.toLowerCase())) continue;
+        this.db.docs.push({ id: uid(), appId: app.id, kind: doc.kind, title: doc.title, content: doc.content, order: this.db.docs.filter((x) => x.appId === app.id).length, updatedAt: nowIso(), updatedBy: admin.name });
+        docs++;
+      }
+      for (const r of d.releases ?? []) {
+        if (this.db.releases.some((x) => x.appId === app.id && x.version === r.version)) continue;
+        this.db.releases.push({ id: uid(), appId: app.id, version: r.version, date: r.date, title: r.title, notes: r.notes, createdAt: nowIso() });
+        releases++;
+      }
+      if (d.tasks) {
+        let group = this.db.groups.find((g) => g.appId === app.id && g.title.toLowerCase() === d.tasks!.group.toLowerCase());
+        if (!group) { group = { id: uid(), appId: app.id, title: d.tasks.group, order: this.db.groups.filter((g) => g.appId === app.id).length, createdAt: nowIso() }; this.db.groups.push(group); }
+        for (const t of d.tasks.items) {
+          if (this.db.tasks.some((x) => x.appId === app.id && x.title.toLowerCase() === t.title.toLowerCase())) continue;
+          this.db.tasks.push(this.buildTask(group, { ...t, assignee: app.source !== "vendor" ? admin.name : "" }, admin.name));
+          tasks++;
+        }
+      }
+      this.touch(app);
+    }
+    this.log(ctx, "update", "app", null, null, `Filled application details: ${apps} apps, ${docs} docs, ${releases} releases, ${tasks} tasks`);
+    return { apps, docs, releases, tasks };
+  }
 
   /** Adds the vendor apps from the Smartworld landscape and fills seats / ticket keywords on matching apps. Safe to re-run. */
   loadLandscape(ctx: Ctx) {
@@ -1445,6 +1512,11 @@ export class Service {
       this.db.sessions = sessions.filter((s) => this.db.users.some((u) => u.id === s.userId));
       this.log(ctx, "restore", "backup", null, null, `Restored a backup (${db.apps.length} applications, ${db.users.length} users)`);
       return { apps: this.db.apps.length, users: this.db.users.length };
+    }, { write: true });
+
+    this.on("admin.fillDetails", (ctx, p: { overwrite?: boolean }) => {
+      this.admin(ctx);
+      return this.fillDetails(ctx, p.overwrite ? "overwrite" : "fill");
     }, { write: true });
 
     this.on("admin.loadLandscape", (ctx) => {
