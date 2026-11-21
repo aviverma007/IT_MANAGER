@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { AppLogo } from "@/components/app/app-logo";
+import { AppLogo, useLogoColor } from "@/components/app/app-logo";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Banknote, Bot, Boxes, Briefcase, Building2, ChevronDown, Cloud, Code2, Gauge, HardDrive, Headphones, LayoutGrid, LayoutList, Search, ExternalLink, Megaphone, Monitor, PieChart, Server, ShieldCheck, Users, Wrench,
@@ -248,38 +248,11 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
         <Tabs id="landscape-cards-sort" value={sort} onChange={setSort} tabs={[{ value: "group", label: "By group" }, { value: "name", label: "A–Z" }, { value: "users", label: "Most users" }, { value: "util", label: "Seats used %" }, { value: "tickets", label: "Open tickets" }]} />
       </div>
       {list ? (
-        <div className="glass overflow-x-auto rounded-3xl">
-          <table className="w-full min-w-[980px] text-sm">
-            <thead><tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">{["Application", "Group", "Status", "Users / seats", "Seats used", "Tickets", ""].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
-            <tbody>
-              {shown.map(({ a, group, tone }, i) => {
-                const u = a.landscape.utilization;
-                return (
-                  <motion.tr key={a.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 25) * 0.012 }} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-2.5">
-                      <Link to={`/apps/${a.id}`} className="flex items-center gap-3">
-                        <AppLogo app={a} className="size-12" />
-                        <span className="min-w-0"><span className="flex items-center gap-1.5 truncate font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
-                          <span className="block truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span></span>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2.5"><span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium"><span className="size-2 rounded-full" style={{ background: tone }} />{group}</span></td>
-                    <td className="px-4 py-2.5"><StatusBadge status={a.status} /></td>
-                    <td className="px-4 py-2.5"><PeopleChip app={a} big onOpen={() => openPeople(a)} /></td>
-                    <td className="w-64 px-4 py-2.5">
-                      <span className="flex items-center gap-2">
-                        <span className="deboss h-1.5 w-20 shrink-0 overflow-hidden rounded-full"><span className="block h-full rounded-full" style={{ width: `${Math.min(100, u ?? 0)}%`, background: utilColor(u) }} /></span>
-                        <span className="w-10 text-right font-bold tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</span>
-                        <UsageTag app={a} />
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">{a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : <span className="text-xs text-muted-foreground">—</span>}</td>
-                    <td className="px-4 py-2.5 text-right">{a.url && <button onClick={() => openApp(a)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary" title={a.url}><ExternalLink className="size-3.5" />Open</button>}</td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-[1020px] flex-col gap-2">
+            <div className={cn(LIST_COLS, "px-4 pb-1 text-left text-xs uppercase tracking-wider text-muted-foreground")}>{["Application", "Group", "Status", "Users / seats", "Seats used", "Tickets", ""].map((h) => <span key={h} className="font-medium">{h}</span>)}</div>
+            {shown.map(({ a, group, tone }, i) => <ListRow key={a.id} a={a} group={group} tone={tone} i={i} onTickets={onTickets} onPeople={() => openPeople(a)} />)}
+          </div>
         </div>
       ) : (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
@@ -329,6 +302,41 @@ function AppCardsGrid({ groups, by, onTickets, list }: { groups: [string, AppSum
       )}
       {!shown.length && <p className="py-8 text-center text-sm text-muted-foreground">No application matches “{q}”.</p>}
     </div>
+  );
+}
+
+const LIST_COLS = "grid grid-cols-[minmax(250px,2.2fr)_minmax(150px,1.2fr)_96px_minmax(150px,1.2fr)_minmax(230px,1.7fr)_minmax(120px,1fr)_70px] items-center gap-3";
+
+/** One application in the List view — the whole row takes the colour of its logo. */
+function ListRow({ a, group, tone, i, onTickets, onPeople }: { a: AppSummary; group: string; tone: string; i: number; onTickets: DrillTo; onPeople: () => void }) {
+  const logoColor = useLogoColor(a);
+  const c = logoColor ?? tone;
+  const grey = logoColor ? (() => { const n = parseInt(logoColor.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return Math.max(r, g, b) - Math.min(r, g, b) < 30; })() : false;
+  const k = grey ? 0.45 : 1; // black / grey logos get a lighter wash
+  const u = a.landscape.utilization;
+  return (
+    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 25) * 0.012 }} whileHover={{ x: 3 }}
+      className={cn(LIST_COLS, "relative overflow-hidden rounded-2xl px-4 py-2.5 text-sm")}
+      style={{
+        background: `linear-gradient(90deg, color-mix(in oklab, ${c} ${30 * k}%, var(--card)) 0%, color-mix(in oklab, ${c} ${16 * k}%, var(--card)) 35%, color-mix(in oklab, ${c} ${8 * k}%, var(--card)) 100%)`,
+        boxShadow: `inset 4px 0 0 ${c}, 0 0 0 1px color-mix(in oklab, ${c} 22%, transparent), 0 8px 20px -14px ${c}`,
+      }}>
+      <Link to={`/apps/${a.id}`} className="flex min-w-0 items-center gap-3">
+        <AppLogo app={a} className="size-12" />
+        <span className="min-w-0"><span className="flex items-center gap-1.5 truncate font-semibold hover:underline">{a.name}{a.source === "in-house" && <span className="rounded bg-primary/12 px-1 text-[9px] font-bold uppercase text-primary">IT</span>}</span>
+          <span className="block truncate text-xs text-muted-foreground">{[a.vendor, a.hosting && HOSTING_META[a.hosting]?.label].filter(Boolean).join(" · ") || a.category}</span></span>
+      </Link>
+      <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium"><span className="size-2 shrink-0 rounded-full" style={{ background: tone }} />{group}</span>
+      <span><StatusBadge status={a.status} /></span>
+      <span><PeopleChip app={a} big onOpen={onPeople} /></span>
+      <span className="flex items-center gap-2">
+        <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-foreground/10"><span className="block h-full rounded-full" style={{ width: `${Math.min(100, u ?? 0)}%`, background: utilColor(u) }} /></span>
+        <span className="w-10 text-right font-bold tabular-nums" style={{ color: utilColor(u) }}>{u === null ? "—" : `${u}%`}</span>
+        <UsageTag app={a} />
+      </span>
+      <span>{a.tickets?.total ? <TicketHoverChip app={a} onOpen={() => onTickets({ title: a.name, appIds: [a.id] })} /> : <span className="text-xs text-muted-foreground">—</span>}</span>
+      <span className="text-right">{a.url && <button onClick={() => openApp(a)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground" title={a.url}><ExternalLink className="size-3.5" />Open</button>}</span>
+    </motion.div>
   );
 }
 
