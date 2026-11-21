@@ -127,7 +127,7 @@ export default function AppDetailPage() {
           { value: "usage", label: "Usage", icon: <Activity /> },
           { value: "users", label: "Users", icon: <UsersIcon />, count: app.people?.listed || undefined },
           { value: "tickets", label: "Tickets", icon: <Ticket />, count: app.tickets?.open },
-          { value: "docs", label: "Docs & manual", icon: <BookOpen />, count: app.docs.length },
+          { value: "docs", label: "Docs & manual", icon: <BookOpen />, count: app.docs.length + (app.attachments.some((f) => / – User manual\.pdf$/.test(f.name)) ? 1 : 0) },
           { value: "releases", label: "Releases", icon: <Rocket />, count: app.releases.length },
           { value: "files", label: "Files", icon: <FileBox />, count: app.attachments.length },
           { value: "access", label: "Access", icon: <Shield /> },

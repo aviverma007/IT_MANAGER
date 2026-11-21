@@ -11,7 +11,8 @@ import { useConfirm } from "@/components/ui/modal";
 import { Markdown, htmlToMarkdown, tocOf } from "@/components/app/markdown";
 import { manualTemplate, technicalTemplate } from "@/core/templates";
 import { cn, download, timeAgo } from "@/lib/utils";
-import { shotSrc } from "@/api/client";
+import { call, shotSrc } from "@/api/client";
+import type { Attachment } from "@/core/types";
 import { Camera } from "lucide-react";
 import { toast } from "sonner";
 import { ManualPdfCard } from "./manual-pdf";
@@ -39,11 +40,44 @@ async function fileToMarkdown(file: File) {
   return textContent;
 }
 
+const PDF_KEY = "__manual_pdf";
+
+/** Shows the illustrated PDF manual right inside the page (the browser's own PDF viewer: zoom, page thumbnails, print). */
+function PdfViewer({ file }: { file: { id: string; name: string } }) {
+  const [url, setUrl] = React.useState<string | null>(null);
+  const [error, setError] = React.useState("");
+  React.useEffect(() => {
+    let alive = true, made = "";
+    setUrl(null); setError("");
+    call<Attachment>("files.get", { id: file.id }).then(async (f) => {
+      const blob = await (await fetch(f.dataUrl)).blob();
+      made = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      if (alive) setUrl(made); else URL.revokeObjectURL(made);
+    }).catch((e) => alive && setError((e as Error).message));
+    return () => { alive = false; if (made) URL.revokeObjectURL(made); };
+  }, [file.id]);
+  return (
+    <GlassCard className="flex flex-col gap-3 p-3">
+      <div className="flex flex-wrap items-center gap-2 px-2 pt-1">
+        <span className="text-sm font-semibold">{file.name}</span>
+        <div className="ml-auto flex gap-1">
+          {url && <Button size="sm" variant="ghost" onClick={() => window.open(url, "_blank")}><Eye />Open full screen</Button>}
+          {url && <Button size="sm" variant="ghost" onClick={() => { const a = document.createElement("a"); a.href = url; a.download = file.name; a.click(); }}><Download />Download</Button>}
+        </div>
+      </div>
+      {error ? <p className="p-6 text-sm text-destructive">{error}</p>
+        : url ? <iframe title={file.name} src={url} className="h-[calc(100vh-14rem)] min-h-[640px] w-full rounded-xl border border-border bg-white" />
+        : <div className="flex h-[640px] items-center justify-center text-sm text-muted-foreground">Loading the manual…</div>}
+    </GlassCard>
+  );
+}
+
 export function DocsTab({ app }: { app: AppDetail }) {
   const run = useRun();
   const confirm = useConfirm();
   const canEdit = app.permission === "edit";
-  const [selected, setSelected] = React.useState<string | null>(app.docs.find((d) => d.kind === "manual")?.id ?? app.docs[0]?.id ?? null);
+  const pdf = app.attachments.find((f) => / – User manual\.pdf$/.test(f.name));
+  const [selected, setSelected] = React.useState<string | null>(pdf ? PDF_KEY : app.docs.find((d) => d.kind === "manual")?.id ?? app.docs[0]?.id ?? null);
   const [editing, setEditing] = React.useState<Partial<Doc> | null>(null);
   const [pane, setPane] = React.useState<"split" | "write" | "preview">("split");
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -60,9 +94,12 @@ export function DocsTab({ app }: { app: AppDetail }) {
   }
   const doc = app.docs.find((d) => d.id === selected) ?? null;
 
-  React.useEffect(() => { if (!app.docs.some((d) => d.id === selected)) setSelected(app.docs[0]?.id ?? null); }, [app.docs, selected]);
+  React.useEffect(() => {
+    if (selected === PDF_KEY ? !pdf : !app.docs.some((d) => d.id === selected)) setSelected(pdf ? PDF_KEY : app.docs[0]?.id ?? null);
+  }, [app.docs, selected, pdf]);
+  const showPdf = selected === PDF_KEY && !!pdf && !editing;
 
-  const toc = tocOf(editing ? editing.content ?? "" : doc?.content ?? "");
+  const toc = showPdf ? [] : tocOf(editing ? editing.content ?? "" : doc?.content ?? "");
 
   async function save() {
     if (!editing) return;
@@ -90,7 +127,14 @@ export function DocsTab({ app }: { app: AppDetail }) {
         <GlassCard className="p-3">
           <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Documents</div>
           <div className="flex flex-col gap-1">
-            {app.docs.length === 0 && <p className="px-2 py-3 text-sm text-muted-foreground">No documents yet.</p>}
+            {pdf && (
+              <button onClick={() => { setSelected(PDF_KEY); setEditing(null); }} className={cn("relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm", showPdf ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
+                {showPdf && <motion.span layoutId="doc-sel" className="emboss absolute inset-0 -z-10 rounded-xl border border-border" />}
+                <BookOpen className="size-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1"><span className="block truncate font-medium">User manual (PDF)</span><span className="block text-[11px] text-muted-foreground">With pictures · {(pdf.size / 1048576).toFixed(1)} MB</span></span>
+              </button>
+            )}
+            {app.docs.length === 0 && !pdf && <p className="px-2 py-3 text-sm text-muted-foreground">No documents yet.</p>}
             {app.docs.map((d) => {
               const Icon = KIND_META[d.kind].icon;
               return (
@@ -130,7 +174,11 @@ export function DocsTab({ app }: { app: AppDetail }) {
       </aside>
 
       <AnimatePresence mode="wait">
-        {editing ? (
+        {showPdf ? (
+          <motion.div key="pdf" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+            <PdfViewer file={pdf!} />
+          </motion.div>
+        ) : editing ? (
           <motion.div key="edit" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}>
             <GlassCard className="flex flex-col gap-4 p-5">
               <div className="flex flex-wrap items-center gap-3">

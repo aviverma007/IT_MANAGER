@@ -140,7 +140,7 @@ function html(input: BuildInput, shots: Map<number, string>) {
   const { app, manual } = input;
   const date = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
   const accent = "#4f46e5";
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(app.name)} – User manual</title><style>
     @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
     * { box-sizing: border-box; }
     body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #1f2937; font-size: 10.5pt; line-height: 1.5; margin: 0; }
