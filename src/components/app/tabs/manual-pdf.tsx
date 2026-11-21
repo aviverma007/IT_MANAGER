@@ -58,7 +58,7 @@ export function ManualPdfCard({ app }: { app: AppDetail }) {
     <GlassCard className="p-4">
       <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"><BookOpenCheck className="size-3.5" />User manual (PDF)</div>
       {pdf ? (
-        <p className="mb-3 text-xs text-muted-foreground">Made {timeAgo(pdf.uploadedAt)} by {pdf.uploadedBy} · {(pdf.size / 1048576).toFixed(1)} MB</p>
+        <p className="mb-3 text-xs text-muted-foreground">{pdf.uploadedBy.startsWith("IT team (bundled") ? "Included with IT Manager · sample screens" : `Made ${timeAgo(pdf.uploadedAt)} by ${pdf.uploadedBy}`} · {(pdf.size / 1048576).toFixed(1)} MB</p>
       ) : (
         <p className="mb-3 text-xs text-muted-foreground">Step-by-step manual with pictures of every screen, made from the live app.</p>
       )}

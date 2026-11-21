@@ -10,7 +10,7 @@ import type { DB } from "../src/core/types.ts";
 import { fetchTickets, sdpConfigured } from "./sdp.ts";
 import { landscapeItemFor } from "../src/core/landscape.ts";
 import { manualFor } from "../src/core/manuals.ts";
-import { buildManual } from "./manual.ts";
+import { buildManual, manualMarkdown } from "./manual.ts";
 
 // Optional .env next to package.json (ServiceDesk Plus keys etc.) — never committed.
 try { process.loadEnvFile(path.resolve(import.meta.dirname, "../.env")); } catch { /* no .env */ }
@@ -490,6 +490,44 @@ async function loadLogoFiles() {
 }
 setTimeout(() => void loadLogoFiles().catch((e) => console.log("[logos]", e.message)), 2000);
 setInterval(() => void loadLogoFiles().catch(() => undefined), 60_000).unref();
+
+/* Bundled user manuals: server/manuals holds a ready-made illustrated PDF for each in-house app (made from sample
+   data). On start each one is filed under its app's Docs & manual tab and Files. A manual made later on this server
+   with "Make it again" (real screens) is never replaced by a bundled one; a newer bundled version replaces an older one. */
+const MANUAL_DIR = path.join(import.meta.dirname, "manuals");
+async function loadBundledManuals() {
+  const file = path.join(MANUAL_DIR, "manifest.json");
+  if (!fs.existsSync(file)) return 0;
+  const admin = service.db.users.find((u) => u.role === "admin" && u.active);
+  if (!admin) return 0;
+  const entries = JSON.parse(await fs.promises.readFile(file, "utf8")) as { name: string; file: string; sha1: string; version: number }[];
+  let n = 0;
+  for (const app of service.db.apps.filter((a) => a.source !== "vendor")) {
+    const m = manualFor(app);
+    const e = m && entries.find((x) => x.name === m.names[0]);
+    if (!m || !e || !fs.existsSync(path.join(MANUAL_DIR, e.file))) continue;
+    const tag = `IT team (bundled ${e.sha1})`;
+    const current = service.db.attachments.find((f) => f.appId === app.id && / – User manual\.pdf$/.test(f.name));
+    if (current && (current.uploadedBy === tag || !current.uploadedBy.startsWith("IT team (bundled"))) {
+      // keep the full manual text in Docs (a details refresh can put the short guide back)
+      const doc = service.db.docs.find((d) => d.appId === app.id && d.kind === "manual" && (/ — user guide$/.test(d.title) || d.title === "User manual"));
+      if (doc && !doc.content.includes("— user manual")) { doc.content = manualMarkdown(app, m); doc.updatedAt = new Date().toISOString(); n++; }
+      continue;
+    }
+    const pdf = await fs.promises.readFile(path.join(MANUAL_DIR, e.file));
+    const saved = service.saveManual(admin, app.id, { pdfBase64: pdf.toString("base64"), size: pdf.length, name: `${app.name} – User manual.pdf`, markdown: manualMarkdown(app, m) });
+    const att = service.db.attachments.find((f) => f.id === saved.file.id);
+    if (att) att.uploadedBy = tag;
+    n++;
+  }
+  if (n) {
+    await service.persistNow();
+    service.emitChange({ method: "manual.build", userId: "system", userName: "System", appId: null, summary: `Added ${n} user manual(s)`, at: new Date().toISOString() });
+    console.log(`[manuals] added ${n} bundled user manual PDF(s)`);
+  }
+  return n;
+}
+setTimeout(() => void loadBundledManuals().catch((e) => console.log("[manuals]", e.message)), 3000);
 
 /* Automatic capture: any app that has a link but no screenshot is captured shortly after start-up and
    retried every CAPTURE_RETRY_HOURS (apps that were down get picked up later). CAPTURE_ON_START=false turns it off. */

@@ -1,7 +1,7 @@
 // Builds an illustrated PDF user manual for one application:
 // opens the app in Edge/Chrome, shows the sign-in screen, signs in (login typed by the user, never stored),
 // captures each section's screen, then lays out cover → contents → sections → questions → help and prints to A4.
-import type { Browser, Page } from "playwright-core";
+import type { Browser, BrowserContext, Page } from "playwright-core";
 import type { App } from "../src/core/types.ts";
 import type { Manual, ManualSection } from "../src/core/manuals.ts";
 
@@ -9,6 +9,12 @@ export interface BuildInput {
   app: App;
   manual: Manual;
   login?: { username?: string; password?: string };
+  /** extra sign-ins for sections shown as another role (shot.as) */
+  logins?: Record<string, { username?: string; password?: string }>;
+  /** e.g. stand-in API answers when making sample manuals */
+  prepareContext?: (ctx: BrowserContext) => Promise<void>;
+  /** app link override (defaults to app.url) */
+  url?: string;
   logoDataUrl?: string;
 }
 export interface BuildResult { pdf: Buffer; markdown: string; pictures: number; missed: string[] }
@@ -28,12 +34,20 @@ const settle = async (page: Page, ms = 1500) => {
 const HIDE = "[data-sonner-toaster],.Toastify,.toast-container,.notistack-SnackbarContainer,.MuiSnackbar-root{display:none!important}";
 const shoot = async (page: Page) => {
   await page.addStyleTag({ content: HIDE }).catch(() => undefined);
+  // never show sign-in hints such as "default account — admin / admin" in a manual
+  await page.evaluate(() => {
+    for (const el of Array.from(document.querySelectorAll("body *"))) {
+      const t = (el as HTMLElement).innerText || "";
+      if (el.children.length < 3 && t.length < 160 && /default (account|password|login)|password\s*[:=]/i.test(t)) (el as HTMLElement).style.visibility = "hidden";
+    }
+  }).catch(() => undefined);
   return `data:image/jpeg;base64,${(await page.screenshot({ type: "jpeg", quality: 70 })).toString("base64")}`;
 };
 
 async function signIn(page: Page, login: BuildInput["login"]) {
   if (!login?.username || !login.password) return false;
   const pw = page.locator("input[type=password]:visible").first();
+  await pw.waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined); // some apps show a loading splash first
   if (!(await pw.count())) return false;
   const user = page.locator("input:visible:not([type=password]):not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button])");
   if (await user.count()) await user.nth(0).fill(login.username);
@@ -43,44 +57,71 @@ async function signIn(page: Page, login: BuildInput["login"]) {
   return true;
 }
 
-/** Click a menu item / tab / button by its visible text. */
+/** Click a menu item / tab / button by its visible text (exact text first, then links/buttons whose name starts with it). */
 async function clickText(page: Page, text: string) {
-  const exact = { name: text, exact: true };
-  const target = page.getByRole("link", exact).or(page.getByRole("button", exact)).or(page.getByRole("tab", exact))
-    .or(page.getByRole("menuitem", exact)).or(page.getByText(text, { exact: true }));
-  const el = target.filter({ visible: true }).first();
-  await el.click({ timeout: 6_000 });
+  const esc = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const candidates = [
+    page.getByRole("link", { name: text, exact: true }), page.getByRole("button", { name: text, exact: true }),
+    page.getByRole("tab", { name: text, exact: true }), page.getByRole("menuitem", { name: text, exact: true }),
+    page.getByText(text, { exact: true }),
+    page.getByRole("link", { name: new RegExp(`^\\W*${esc}\\b`) }), page.getByRole("button", { name: new RegExp(`^\\W*${esc}\\b`) }),
+    page.getByText(new RegExp(`^\\W*${esc}\\W*$`)),
+  ];
+  for (const loc of candidates) {
+    const n = Math.min(await loc.count(), 8);
+    for (let i = 0; i < n; i++) {
+      const el = loc.nth(i);
+      if (await el.isVisible()) { await el.click({ timeout: 5_000 }); return; }
+    }
+  }
+  throw new Error(`"${text}" not found on the page`);
 }
 
 async function captureSections(browser: Browser, input: BuildInput) {
   const shots = new Map<number, string>();
   const missed: string[] = [];
-  const context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, ignoreHTTPSErrors: true });
-  const page = await context.newPage();
-  const base = input.app.url;
-  try {
+  const base = input.url || input.app.url;
+  const sections = input.manual.sections;
+  let context: BrowserContext | null = null, page: Page | null = null, role = "";
+  const start = async (r: string) => {
+    if (context) await context.close();
+    context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, ignoreHTTPSErrors: true });
+    if (input.prepareContext) await input.prepareContext(context);
+    page = await context.newPage();
+    role = r;
     await open(page, base);
-    await settle(page, 1200);
-    const sections = input.manual.sections;
+    await settle(page, 1500);
+  };
+  try {
+    await start("");
     const signInIdx = sections.findIndex((s) => s.title === "Signing in");
-    if (signInIdx >= 0) shots.set(signInIdx, await shoot(page));
-    await signIn(page, input.login);
+    if (signInIdx >= 0) {
+      await page!.locator("input[type=password]:visible").first().waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined);
+      await page!.waitForTimeout(800);
+      shots.set(signInIdx, await shoot(page!));
+    }
+    await signIn(page!, input.login);
+    await settle(page!, 1500);
     for (const [i, s] of sections.entries()) {
       if (!s.shot || i === signInIdx) continue;
       try {
+        const want = s.shot.as && input.logins?.[s.shot.as] ? s.shot.as : "";
+        if (want !== role) { await start(want); await signIn(page!, want ? input.logins![want] : input.login); await settle(page!, 1500); }
+        const p = page!;
         if (s.shot.path !== undefined) {
           const target = s.shot.path === "" ? base : new URL(s.shot.path, base).toString();
-          if (page.url() !== target) { await open(page, target); }
+          if (p.url() !== target) await open(p, target);
         }
-        for (const c of s.shot.click ?? []) { await clickText(page, c); await settle(page, 600); }
-        await settle(page, s.shot.wait ?? 1500);
-        shots.set(i, await shoot(page));
-      } catch {
+        for (const c of s.shot.click ?? []) { await clickText(p, c); await settle(p, 700); }
+        await settle(p, s.shot.wait ?? 1500);
+        shots.set(i, await shoot(p));
+      } catch (e) {
         missed.push(s.title);
+        if (process.env.MANUAL_DEBUG) console.log(`  [${s.title}] ${(e as Error).message.split("\n")[0]}`);
       }
     }
   } finally {
-    await context.close();
+    if (context) await (context as BrowserContext).close();
   }
   return { shots, missed };
 }
@@ -131,6 +172,9 @@ function html(input: BuildInput, shots: Map<number, string>) {
     .tip { border-left: 3px solid #f59e0b; background: #fffbeb; padding: 2.5mm 4mm; margin-top: 3mm; page-break-inside: avoid; }
     .tip b { color: #92400e; font-size: 9.5pt; }
     .tip p { margin: 1mm 0 0; }
+    table.roles { border-collapse: collapse; width: 100%; font-size: 10pt; }
+    table.roles td { padding: 1.2mm 2mm; border-top: 1px solid #e5e7eb; vertical-align: top; }
+    table.roles td:first-child { font-weight: 600; width: 45mm; color: #111827; }
     .faq dt { font-weight: 700; margin-top: 3mm; color: #111827; }
     .faq dd { margin: 1mm 0 0; }
   </style></head><body>
@@ -145,6 +189,7 @@ function html(input: BuildInput, shots: Map<number, string>) {
     <h2>About ${esc(app.name)}</h2>
     <p>${esc(manual.intro)}</p>
     ${app.url && /^https?:/i.test(app.url) ? `<div class="box"><b>Where to open it</b>${esc(app.url)}</div>` : ""}
+    ${manual.roles?.length ? `<div class="box"><b>Who can do what</b><table class="roles">${manual.roles.map((r) => `<tr><td>${esc(r.role)}</td><td>${esc(r.can)}</td></tr>`).join("")}</table></div>` : ""}
     ${manual.before?.length ? `<div class="box"><b>Before you start</b><ul>${manual.before.map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div>` : ""}
     <h2 style="margin-top:8mm">Contents</h2>
     <ol>${manual.sections.map((s) => `<li>${esc(s.title)}</li>`).join("")}${manual.faq?.length ? "<li>Common questions</li>" : ""}<li>Getting help</li></ol>
@@ -159,6 +204,7 @@ function html(input: BuildInput, shots: Map<number, string>) {
 
 export function manualMarkdown(app: App, manual: Manual) {
   const out = [`# ${app.name} — user manual`, "", manual.intro, ""];
+  if (manual.roles?.length) out.push("| Role | Can |", "| --- | --- |", ...manual.roles.map((r) => `| ${r.role} | ${r.can} |`), "");
   if (manual.before?.length) out.push("**Before you start**", "", ...manual.before.map((b) => `- ${b}`), "");
   manual.sections.forEach((s, i) => {
     out.push(`## ${i + 1}. ${s.title}`, "");
@@ -172,7 +218,7 @@ export function manualMarkdown(app: App, manual: Manual) {
 }
 
 export async function buildManual(browser: Browser, input: BuildInput): Promise<BuildResult> {
-  const canOpen = /^https?:/i.test(input.app.url) && input.manual.sections.some((s) => s.shot);
+  const canOpen = /^https?:/i.test(input.url || input.app.url) && input.manual.sections.some((s) => s.shot);
   const { shots, missed } = canOpen ? await captureSections(browser, input) : { shots: new Map<number, string>(), missed: [] as string[] };
   const context = await browser.newContext();
   try {

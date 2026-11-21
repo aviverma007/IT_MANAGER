@@ -344,7 +344,9 @@ export class Service {
     };
     this.db.attachments.push(file);
     const title = "User manual";
-    let doc = this.db.docs.find((d) => d.appId === app.id && d.kind === "manual" && d.title === title);
+    // the full manual text goes into the app's existing user guide when it has one
+    let doc = this.db.docs.find((d) => d.appId === app.id && d.kind === "manual" && / — user guide$/.test(d.title))
+      ?? this.db.docs.find((d) => d.appId === app.id && d.kind === "manual" && d.title === title);
     if (!doc) {
       doc = { id: uid(), appId: app.id, kind: "manual", title, content: "", order: -1, updatedAt: nowIso(), updatedBy: user.name };
       this.db.docs.push(doc);
