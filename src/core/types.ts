@@ -360,6 +360,21 @@ export interface DashboardStats {
   topApps: { id: string; name: string; sessions: number; tone: Tone }[];
   dueSoon: (Task & { appName: string })[];
   recent: LogEntry[];
+  /** daily sessions + active users for the busiest apps (last 30 days) */
+  appSeries: { id: string; name: string; tone: Tone; sessions: number[]; users: number[] }[];
+  tickets: {
+    open: number; high: number; created30: number; closed30: number; unmatched: number; prevCreated30: number;
+    perDay: { date: string; created: number; closed: number }[];
+    byApp: { id: string; name: string; tone: Tone; open: number; high: number }[];
+    latest: { id: string; displayId: string; subject: string; priority: string; status: string; appId: string | null; appName: string; createdAt: string; url: string; technician: string }[];
+    lastSync: string | null;
+  };
+  seats: { seats: number; active: number; util: number | null; under: { id: string; name: string; tone: Tone; util: number; active: number; seats: number }[] };
+  mix: { inHouse: number; vendor: number; hosting: { key: string; count: number }[] };
+  workload: { name: string; open: number; overdue: number }[];
+  /** open tasks per due date, today − 7 … today + 45 */
+  calendar: Record<string, number>;
+  people: { listed: number; seen30: number };
 }
 
 export interface Paged<T> {

@@ -492,6 +492,78 @@ export class Service {
     return { created, updated, skipped };
   }
 
+
+  private dashboardExtras(user: UserRecord, apps: App[], summaries: AppSummary[], tasks: Task[], dates: string[]) {
+    const today = ymd();
+    const ids = new Set(apps.map((a) => a.id));
+    const index = new Map(dates.map((d, i) => [d, i]));
+    // per-app series for the busiest 6
+    const top = [...summaries].sort((a, b) => b.usage.sessions30 - a.usage.sessions30 || b.landscape.activeUsers - a.landscape.activeUsers).slice(0, 6);
+    const appSeries = top.map((a) => ({ id: a.id, name: a.name, tone: a.tone, sessions: dates.map(() => 0), users: dates.map(() => 0) }));
+    const pos = new Map(appSeries.map((x, i) => [x.id, i]));
+    for (const u of this.db.usage) {
+      const k = pos.get(u.appId); const i = index.get(u.date);
+      if (k !== undefined && i !== undefined) { appSeries[k]!.sessions[i] += u.sessions; appSeries[k]!.users[i] += u.activeUsers; }
+    }
+    // tickets
+    const match = this.ticketMatches();
+    const rows = this.db.tickets.filter((t) => { const a = match.get(t.id)?.appId; return a ? ids.has(a) : user.role !== "viewer"; });
+    const since30 = new Date(Date.now() - 30 * 864e5).toISOString(), since60 = new Date(Date.now() - 60 * 864e5).toISOString();
+    const from14 = addDays(today, -13);
+    const perDay = Array.from({ length: 14 }, (_, i) => ({ date: addDays(from14, i), created: 0, closed: 0 }));
+    const dayIdx = new Map(perDay.map((d, i) => [d.date, i]));
+    const byApp = new Map<string, { open: number; high: number }>();
+    const isHigh = (p: string) => /high|urgent|critical|p1|p2/i.test(p);
+    for (const t of rows) {
+      const c = dayIdx.get(ymd(new Date(t.createdAt))); if (c !== undefined) perDay[c]!.created++;
+      if (!t.open && t.closedAt) { const d = dayIdx.get(ymd(new Date(t.closedAt))); if (d !== undefined) perDay[d]!.closed++; }
+      const a = match.get(t.id)?.appId;
+      if (a && t.open) { const e = byApp.get(a) ?? { open: 0, high: 0 }; e.open++; if (isHigh(t.priority)) e.high++; byApp.set(a, e); }
+    }
+    const names = new Map(apps.map((a) => [a.id, a]));
+    const open = rows.filter((t) => t.open);
+    const rank = (p: string) => (/urgent|critical|p1/i.test(p) ? 0 : /high|p2/i.test(p) ? 1 : /medium|normal/i.test(p) ? 2 : 3);
+    const tickets = {
+      open: open.length, high: open.filter((t) => isHigh(t.priority)).length,
+      created30: rows.filter((t) => t.createdAt >= since30).length, prevCreated30: rows.filter((t) => t.createdAt >= since60 && t.createdAt < since30).length,
+      closed30: rows.filter((t) => !t.open && (t.closedAt || t.createdAt) >= since30).length,
+      unmatched: open.filter((t) => !match.get(t.id)?.appId).length,
+      perDay,
+      byApp: [...byApp.entries()].map(([id, e]) => ({ id, name: names.get(id)?.name ?? "", tone: names.get(id)?.tone ?? 1, ...e })).sort((a, b) => b.open - a.open).slice(0, 8),
+      latest: [...open].sort((a, b) => rank(a.priority) - rank(b.priority) || b.createdAt.localeCompare(a.createdAt)).slice(0, 8).map((t) => {
+        const a = match.get(t.id)?.appId ?? null;
+        return { id: t.id, displayId: t.displayId, subject: t.subject, priority: t.priority, status: t.status, appId: a, appName: a ? names.get(a)?.name ?? "" : "", createdAt: t.createdAt, url: t.url, technician: t.technician };
+      }),
+      lastSync: this.db.ticketSync.lastOk,
+    };
+    // seats
+    const withSeats = summaries.filter((a) => a.seats > 0);
+    const seatsTotal = withSeats.reduce((n, a) => n + a.seats, 0);
+    const activeOnSeats = withSeats.reduce((n, a) => n + Math.min(a.landscape.activeUsers, a.seats * 5), 0);
+    const seats = {
+      seats: seatsTotal, active: summaries.reduce((n, a) => n + a.landscape.activeUsers, 0), util: seatsTotal ? Math.round((activeOnSeats / seatsTotal) * 100) : null,
+      under: withSeats.filter((a) => (a.landscape.utilization ?? 100) < 60).sort((a, b) => (a.landscape.utilization ?? 0) - (b.landscape.utilization ?? 0)).slice(0, 6)
+        .map((a) => ({ id: a.id, name: a.name, tone: a.tone, util: a.landscape.utilization ?? 0, active: a.landscape.activeUsers, seats: a.seats })),
+    };
+    const hostCount = new Map<string, number>();
+    for (const a of apps) hostCount.set(a.hosting || "", (hostCount.get(a.hosting || "") ?? 0) + 1);
+    const mix = { inHouse: apps.filter((a) => a.source !== "vendor").length, vendor: apps.filter((a) => a.source === "vendor").length, hosting: [...hostCount.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count) };
+    // workload per assignee
+    const load = new Map<string, { open: number; overdue: number }>();
+    for (const t of tasks) {
+      if (t.done) continue;
+      for (const n of String(t.assignee || "").split(/[,;]/).map((x) => x.trim()).filter(Boolean)) {
+        const e = load.get(n) ?? { open: 0, overdue: 0 }; e.open++; if (t.dueDate && t.dueDate < today) e.overdue++; load.set(n, e);
+      }
+    }
+    const workload = [...load.entries()].map(([name, e]) => ({ name, ...e })).sort((a, b) => b.open - a.open).slice(0, 6);
+    const calendar: Record<string, number> = {};
+    const cFrom = addDays(today, -7), cTo = addDays(today, 45);
+    for (const t of tasks) if (!t.done && t.dueDate && t.dueDate >= cFrom && t.dueDate <= cTo) calendar[t.dueDate] = (calendar[t.dueDate] ?? 0) + 1;
+    const people = summaries.reduce((acc, a) => ({ listed: acc.listed + a.people.listed, seen30: acc.seen30 + a.people.seen30 }), { listed: 0, seen30: 0 });
+    return { appSeries, tickets, seats, mix, workload, calendar, people };
+  }
+
   /* ---------------------------------------------------- tickets ----------------------------------------------------- */
 
   /** ticket id → { appId, matchedBy }. Rebuilt lazily after any write or sync. */
@@ -1349,6 +1421,7 @@ export class Service {
         dueSoon: tasks.filter((t) => !t.done && t.dueDate && t.dueDate <= soon).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)).slice(0, 8)
           .map((t) => ({ ...t, appName: apps.find((a) => a.id === t.appId)?.name ?? "" })),
         recent: this.db.logs.filter((l) => ctx.user.role === "admin" || (l.appId ? ids.has(l.appId) : l.userId === ctx.user.id)).slice(0, 12),
+        ...this.dashboardExtras(ctx.user, apps, summaries, tasks, series.map((x) => x.date)),
       };
     });
 
